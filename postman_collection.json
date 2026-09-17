@@ -1,0 +1,415 @@
+{
+  "info": {
+    "_postman_id": "hotel-mgmt-multi-tenant-v1",
+    "name": "Hotel Management API (Multi-Tenant SaaS)",
+    "description": "Production-ready Postman Collection for Multi-Tenant Hotel Management System with Super Admin, Hotel Admin, and Receptionist roles, tenant isolation, and live sync.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Authentication & Security",
+      "item": [
+        {
+          "name": "Login (Super Admin / Hotel Admin / Receptionist)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"superadmin@hotelmgmt.com\",\n  \"password\": \"SuperAdmin@2026\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+          }
+        },
+        {
+          "name": "Get Current Profile (Me)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth", "me"] }
+          }
+        },
+        {
+          "name": "Change Password (First Login / Profile)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"SuperAdmin@2026\",\n  \"newPassword\": \"NewSecurePass@2026\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/change-password", "host": ["{{baseUrl}}"], "path": ["auth", "change-password"] }
+          }
+        },
+        {
+          "name": "Forgot Password (Send OTP)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jatinkakadiya01@gmail.com\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/forgot-password", "host": ["{{baseUrl}}"], "path": ["auth", "forgot-password"] }
+          }
+        },
+        {
+          "name": "Reset Password with OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jatinkakadiya01@gmail.com\",\n  \"otp\": \"123456\",\n  \"newPassword\": \"ResetPass@2026\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/reset-password", "host": ["{{baseUrl}}"], "path": ["auth", "reset-password"] }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/auth/logout", "host": ["{{baseUrl}}"], "path": ["auth", "logout"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Public Hotel Registration",
+      "item": [
+        {
+          "name": "Register New Hotel (Status: PENDING_APPROVAL)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"The Grand Royale Resort & Spa\",\n  \"ownerName\": \"Jatin Patel\",\n  \"ownerEmail\": \"jatinkakadiya01@gmail.com\",\n  \"ownerPhone\": \"+91 98765 43210\",\n  \"address\": \"742 Ocean Drive, Coastal Paradise\",\n  \"city\": \"Ahmedabad\",\n  \"state\": \"Gujarat\",\n  \"country\": \"India\",\n  \"pincode\": \"380015\",\n  \"gstNumber\": \"24ABCDE1234F1Z5\",\n  \"totalRooms\": 25,\n  \"hotelType\": \"Luxury Boutique Hotel\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/hotels/register", "host": ["{{baseUrl}}"], "path": ["hotels", "register"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Super Admin (Master Control)",
+      "item": [
+        {
+          "name": "Super Admin Dashboard KPIs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/super-admin/dashboard", "host": ["{{baseUrl}}"], "path": ["super-admin", "dashboard"] }
+          }
+        },
+        {
+          "name": "Get All Hotels (Filter by status/trial)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/hotels?status=ALL&subscriptionStatus=ALL",
+              "host": ["{{baseUrl}}"],
+              "path": ["super-admin", "hotels"],
+              "query": [
+                { "key": "status", "value": "ALL" },
+                { "key": "subscriptionStatus", "value": "ALL" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Hotel Details & Staff",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}", "host": ["{{baseUrl}}"], "path": ["super-admin", "hotels", "{{hotelId}}"] }
+          }
+        },
+        {
+          "name": "Approve Hotel (Creates Admin & 30-Day Trial)",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}/approve", "host": ["{{baseUrl}}"], "path": ["super-admin", "hotels", "{{hotelId}}", "approve"] }
+          }
+        },
+        {
+          "name": "Reject Hotel Application",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Invalid GST / Incomplete business documents submitted.\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}/reject", "host": ["{{baseUrl}}"], "path": ["super-admin", "hotels", "{{hotelId}}", "reject"] }
+          }
+        },
+        {
+          "name": "Change Hotel Status (DISABLE / SUSPEND / ACTIVATE)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"DISABLED\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}/status", "host": ["{{baseUrl}}"], "path": ["super-admin", "hotels", "{{hotelId}}", "status"] }
+          }
+        },
+        {
+          "name": "Extend Trial / Grace Period",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"additionalDays\": 30,\n  \"plan\": \"STANDARD\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}/extend-trial", "host": ["{{baseUrl}}"], "path": ["super-admin", "hotels", "{{hotelId}}", "extend-trial"] }
+          }
+        },
+        {
+          "name": "Reset Hotel Admin Password",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}/reset-admin-password", "host": ["{{baseUrl}}"], "path": ["super-admin", "hotels", "{{hotelId}}", "reset-admin-password"] }
+          }
+        },
+        {
+          "name": "View Global System Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/super-admin/audit-logs", "host": ["{{baseUrl}}"], "path": ["super-admin", "audit-logs"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Hotel Admin (Tenant Management)",
+      "item": [
+        {
+          "name": "Hotel Admin Dashboard KPIs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/dashboard", "host": ["{{baseUrl}}"], "path": ["admin", "dashboard"] }
+          }
+        },
+        {
+          "name": "Create Room Type",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Executive Ocean View Suite\",\n  \"description\": \"Luxury king suite with sea view and private jacuzzi.\",\n  \"basePrice\": 4500,\n  \"capacity\": { \"adults\": 2, \"children\": 1 },\n  \"amenities\": [\"Free WiFi\", \"King Bed\", \"Jacuzzi\", \"Ocean View\", \"LED TV\"]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/admin/room-types", "host": ["{{baseUrl}}"], "path": ["admin", "room-types"] }
+          }
+        },
+        {
+          "name": "Get Room Types",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/room-types", "host": ["{{baseUrl}}"], "path": ["admin", "room-types"] }
+          }
+        },
+        {
+          "name": "Create Room",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomNumber\": \"101\",\n  \"roomType\": \"{{roomTypeId}}\",\n  \"floor\": 1,\n  \"customPricePerNight\": 4500\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/admin/rooms", "host": ["{{baseUrl}}"], "path": ["admin", "rooms"] }
+          }
+        },
+        {
+          "name": "Get All Hotel Rooms",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/rooms", "host": ["{{baseUrl}}"], "path": ["admin", "rooms"] }
+          }
+        },
+        {
+          "name": "Update Room Status (AVAILABLE/CLEANING/MAINTENANCE)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"AVAILABLE\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/admin/rooms/{{roomId}}/status", "host": ["{{baseUrl}}"], "path": ["admin", "rooms", "{{roomId}}", "status"] }
+          }
+        },
+        {
+          "name": "Create Receptionist Staff",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Pooja Sharma\",\n  \"email\": \"pooja.reception@gmail.com\",\n  \"phone\": \"+91 98980 11223\",\n  \"employeeId\": \"EMP-101\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/admin/receptionists", "host": ["{{baseUrl}}"], "path": ["admin", "receptionists"] }
+          }
+        },
+        {
+          "name": "Get Receptionists List",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/receptionists", "host": ["{{baseUrl}}"], "path": ["admin", "receptionists"] }
+          }
+        },
+        {
+          "name": "Get Hotel Profile & Settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/profile", "host": ["{{baseUrl}}"], "path": ["admin", "profile"] }
+          }
+        },
+        {
+          "name": "Get Revenue & Occupancy Reports",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/reports", "host": ["{{baseUrl}}"], "path": ["admin", "reports"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Receptionist (Front Desk Operations)",
+      "item": [
+        {
+          "name": "Front Desk Shift Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/receptionist/dashboard", "host": ["{{baseUrl}}"], "path": ["receptionist", "dashboard"] }
+          }
+        },
+        {
+          "name": "Search Available Rooms",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/receptionist/rooms/available", "host": ["{{baseUrl}}"], "path": ["receptionist", "rooms", "available"] }
+          }
+        },
+        {
+          "name": "Register Guest with ID Proof (Aadhaar/Passport/DL)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Rajesh Kumar\",\n  \"mobileNumber\": \"+91 98250 12345\",\n  \"email\": \"rajesh.kumar@example.com\",\n  \"gender\": \"Male\",\n  \"nationality\": \"Indian\",\n  \"city\": \"Mumbai\",\n  \"state\": \"Maharashtra\",\n  \"idType\": \"AADHAAR\",\n  \"idNumber\": \"1234-5678-9012\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/receptionist/guests", "host": ["{{baseUrl}}"], "path": ["receptionist", "guests"] }
+          }
+        },
+        {
+          "name": "Verify Guest ID Proof",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"VERIFIED\",\n  \"verificationNotes\": \"Original Aadhaar card physically verified at check-in desk.\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/receptionist/guests/{{guestId}}/verify-id", "host": ["{{baseUrl}}"], "path": ["receptionist", "guests", "{{guestId}}", "verify-id"] }
+          }
+        },
+        {
+          "name": "Create Booking & Instant Check-In (with Advance)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"guestId\": \"{{guestId}}\",\n  \"roomId\": \"{{roomId}}\",\n  \"checkInDate\": \"2026-09-20\",\n  \"checkOutDate\": \"2026-09-23\",\n  \"adults\": 2,\n  \"children\": 0,\n  \"isInstantCheckIn\": true,\n  \"advancePaymentAmount\": 3000,\n  \"paymentMethod\": \"CASH\",\n  \"discountAmount\": 0,\n  \"specialRequests\": \"Quiet high-floor room preferred.\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/receptionist/bookings", "host": ["{{baseUrl}}"], "path": ["receptionist", "bookings"] }
+          }
+        },
+        {
+          "name": "Add Extra Charges (Room Service, Laundry, Mini-bar)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"ROOM_SERVICE\",\n  \"title\": \"Gourmet Dinner & Drinks\",\n  \"amount\": 850,\n  \"quantity\": 1,\n  \"notes\": \"Delivered to Room 101\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/receptionist/bookings/{{bookingId}}/charges", "host": ["{{baseUrl}}"], "path": ["receptionist", "bookings", "{{bookingId}}", "charges"] }
+          }
+        },
+        {
+          "name": "Process Checkout & Collect Settlement Receipt",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"settlementPaymentAmount\": 2950,\n  \"paymentMethod\": \"UPI\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/receptionist/bookings/{{bookingId}}/check-out", "host": ["{{baseUrl}}"], "path": ["receptionist", "bookings", "{{bookingId}}", "check-out"] }
+          }
+        },
+        {
+          "name": "Get All Guests List",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/receptionist/guests", "host": ["{{baseUrl}}"], "path": ["receptionist", "guests"] }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "hotelId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "roomTypeId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "roomId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guestId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "bookingId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
