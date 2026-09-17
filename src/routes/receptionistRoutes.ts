@@ -13,6 +13,8 @@ import {
   lookupGuest,
   getPaymentsLedger,
   recordDirectPayment,
+  ocrVerifyGovtId,
+  directVerifyDrivingLicense,
 } from '../controllers/receptionistController';
 import { updateRoomStatus } from '../controllers/hotelAdminController';
 import {
@@ -42,6 +44,10 @@ router.get('/guests', getGuestsList);
 router.post('/guests', registerGuest);
 router.delete('/guests/:id', deleteGuest);
 router.put('/guests/:id/verify-id', verifyGuestId);
+
+// Surepass Zero-OTP KYC OCR & Automated Verification
+router.post('/kyc/ocr-verify', ocrVerifyGovtId);
+router.post('/kyc/verify-driving-license', directVerifyDrivingLicense);
 
 // Bookings, Check-In, Extra Charges & Check-Out
 router.get('/bookings', getBookingsList);

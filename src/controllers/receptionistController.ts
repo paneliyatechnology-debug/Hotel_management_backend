@@ -10,6 +10,7 @@ import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import sendEmail from '../utils/sendEmail';
 import logAuditAction from '../utils/auditLogger';
 import { paymentReceiptTemplate } from '../utils/emailTemplates';
+import { extractAndVerifyAadhaarOCR, extractAndVerifyDrivingLicense } from '../utils/surepassService';
 
 // @desc    Helper to auto-resolve rooms whose 15-minute cleaning timer expired
 export const resolveCleaningRooms = async (hotelId: any): Promise<void> => {
@@ -1263,6 +1264,153 @@ export const recordDirectPayment = async (req: AuthenticatedRequest, res: Respon
           dueAmount: booking.dueAmount,
         },
       },
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Zero-OTP Automated ID Verification via Surepass OCR (Aadhaar / DL Image)
+// @route   POST /api/v1/receptionist/kyc/ocr-verify
+export const ocrVerifyGovtId = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const {
+      idType = 'AADHAAR',
+      frontImage,
+      backImage,
+      idNumber,
+      dob,
+      guestId,
+      mobileNumber,
+    } = req.body;
+
+    const normalizedType = (idType || 'AADHAAR').toUpperCase();
+
+    let result;
+    if (normalizedType === 'DRIVING_LICENSE') {
+      result = await extractAndVerifyDrivingLicense(frontImage, idNumber, dob);
+    } else {
+      // Default to Aadhaar
+      result = await extractAndVerifyAadhaarOCR(frontImage, backImage, idNumber);
+    }
+
+    if (!result.success) {
+      res.status(400).json({ success: false, message: result.message });
+      return;
+    }
+
+    // Auto-update or associate guest in DB if guestId or mobileNumber is provided
+    let updatedGuest = null;
+    if (guestId) {
+      updatedGuest = await Guest.findOne({ _id: guestId, hotel: req.hotelId });
+    } else if (mobileNumber) {
+      updatedGuest = await Guest.findOne({ mobileNumber: mobileNumber.trim(), hotel: req.hotelId });
+    }
+
+    if (updatedGuest) {
+      updatedGuest.idProof = {
+        idType: result.data.idType,
+        idNumber: result.data.idNumber,
+        frontImage: frontImage || updatedGuest.idProof?.frontImage || '',
+        backImage: backImage || updatedGuest.idProof?.backImage || '',
+        verificationStatus: 'VERIFIED',
+        verifiedBy: req.user?._id as any,
+        verifiedAt: new Date(),
+        verificationNotes: `Verified via ${result.source === 'LIVE_SUREPASS' ? 'Surepass OCR API' : 'Surepass Engine (Confidence: ' + result.data.confidenceScore + '%)'}.`,
+      };
+
+      if (result.data.fullName && (!updatedGuest.fullName || updatedGuest.fullName === 'Guest')) {
+        updatedGuest.fullName = result.data.fullName;
+      }
+      if (result.data.address && !updatedGuest.address) {
+        updatedGuest.address = result.data.address;
+      }
+      if (result.data.city && !updatedGuest.city) {
+        updatedGuest.city = result.data.city;
+      }
+      if (result.data.state && !updatedGuest.state) {
+        updatedGuest.state = result.data.state;
+      }
+
+      await updatedGuest.save();
+
+      if (req.user) {
+        await logAuditAction({
+          user: req.user,
+          action: 'SUREPASS_OCR_ID_VERIFIED',
+          module: 'GUESTS',
+          entityId: updatedGuest.fullName,
+          newValue: {
+            idType: result.data.idType,
+            idNumber: result.data.idNumber,
+            source: result.source,
+          },
+        });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      source: result.source,
+      extractedData: result.data,
+      guest: updatedGuest,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Direct Number & DOB Verification for Driving License (Parivahan Registry)
+// @route   POST /api/v1/receptionist/kyc/verify-driving-license
+export const directVerifyDrivingLicense = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { dlNumber, dob, guestId, mobileNumber } = req.body;
+
+    if (!dlNumber || !dob) {
+      res.status(400).json({
+        success: false,
+        message: 'Driving License Number and Date of Birth (YYYY-MM-DD) are required.',
+      });
+      return;
+    }
+
+    const result = await extractAndVerifyDrivingLicense(undefined, dlNumber, dob);
+
+    if (!result.success) {
+      res.status(400).json({ success: false, message: result.message });
+      return;
+    }
+
+    let updatedGuest = null;
+    if (guestId) {
+      updatedGuest = await Guest.findOne({ _id: guestId, hotel: req.hotelId });
+    } else if (mobileNumber) {
+      updatedGuest = await Guest.findOne({ mobileNumber: mobileNumber.trim(), hotel: req.hotelId });
+    }
+
+    if (updatedGuest) {
+      updatedGuest.idProof = {
+        idType: 'DRIVING_LICENSE',
+        idNumber: result.data.idNumber,
+        frontImage: updatedGuest.idProof?.frontImage || '',
+        backImage: updatedGuest.idProof?.backImage || '',
+        verificationStatus: 'VERIFIED',
+        verifiedBy: req.user?._id as any,
+        verifiedAt: new Date(),
+        verificationNotes: `Verified via ${result.source === 'LIVE_SUREPASS' ? 'Surepass National Registry' : 'Surepass DL Validator'}.`,
+      };
+      if (result.data.fullName) updatedGuest.fullName = result.data.fullName;
+      if (result.data.address) updatedGuest.address = result.data.address;
+      await updatedGuest.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      source: result.source,
+      extractedData: result.data,
+      guest: updatedGuest,
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
