@@ -106,24 +106,22 @@ export const registerHotel = async (req: Request, res: Response): Promise<void> 
 
     const loginUrl = process.env.ADMIN_URL || 'http://localhost:3001';
 
-    // Send Credentials Email to Hotel Owner immediately
-    try {
-      await sendEmail({
-        email: hotel.ownerEmail,
-        subject: `🎉 Congratulations! ${hotel.name} Registered - Your Admin Credentials`,
-        html: hotelApprovedEmailTemplate({
-          hotelName: hotel.name,
-          ownerName: hotel.ownerName,
-          adminEmail: hotel.ownerEmail,
-          temporaryPassword: rawTempPassword,
-          trialStartDate: new Date().toLocaleDateString(),
-          trialEndDate: trialEnd.toLocaleDateString(),
-          loginUrl,
-        }),
-      });
-    } catch (emailError: any) {
+    // Send Credentials Email to Hotel Owner asynchronously (non-blocking)
+    sendEmail({
+      email: hotel.ownerEmail,
+      subject: `🎉 Congratulations! ${hotel.name} Registered - Your Admin Credentials`,
+      html: hotelApprovedEmailTemplate({
+        hotelName: hotel.name,
+        ownerName: hotel.ownerName,
+        adminEmail: hotel.ownerEmail,
+        temporaryPassword: rawTempPassword,
+        trialStartDate: new Date().toLocaleDateString(),
+        trialEndDate: trialEnd.toLocaleDateString(),
+        loginUrl,
+      }),
+    }).catch((emailError: any) => {
       console.warn('Credentials email failed to send:', emailError.message);
-    }
+    });
 
     res.status(201).json({
       success: true,
