@@ -15,6 +15,7 @@ import sendEmail from '../utils/sendEmail';
 import logAuditAction from '../utils/auditLogger';
 import { receptionistCredentialsEmailTemplate } from '../utils/emailTemplates';
 import { computeSubscriptionMetrics } from './authController';
+import { emitToHotel } from '../utils/socketService';
 
 // @desc    Hotel Admin Dashboard KPI Summary
 // @route   GET /api/v1/admin/dashboard
@@ -284,6 +285,9 @@ export const createRoom = async (req: AuthenticatedRequest, res: Response): Prom
       });
     }
 
+    emitToHotel(req.hotelId, 'ROOM_UPDATED', { roomId: room._id, roomNumber: room.roomNumber, status: room.status });
+    emitToHotel(req.hotelId, 'DASHBOARD_SYNC', { type: 'ROOM_CREATED' });
+
     res.status(201).json({ success: true, message: `Room ${room.roomNumber} created successfully.`, data: populatedRoom || room });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -326,6 +330,9 @@ export const updateRoom = async (req: AuthenticatedRequest, res: Response): Prom
         entityId: room.roomNumber,
       });
     }
+
+    emitToHotel(req.hotelId, 'ROOM_UPDATED', { roomId: room._id, roomNumber: room.roomNumber, status: room.status, customPrice: room.customPricePerNight });
+    emitToHotel(req.hotelId, 'DASHBOARD_SYNC', { type: 'ROOM_UPDATED' });
 
     res.status(200).json({ success: true, message: `Room ${room.roomNumber} updated successfully.`, data: populatedRoom || room });
   } catch (error: any) {
@@ -370,6 +377,9 @@ export const updateRoomStatus = async (req: AuthenticatedRequest, res: Response)
         newValue: { status },
       });
     }
+
+    emitToHotel(req.hotelId, 'ROOM_UPDATED', { roomId: room._id, roomNumber: room.roomNumber, status });
+    emitToHotel(req.hotelId, 'DASHBOARD_SYNC', { type: 'ROOM_STATUS_CHANGED' });
 
     res.status(200).json({ success: true, message: `Room ${room.roomNumber} status set to ${status}.`, data: room });
   } catch (error: any) {

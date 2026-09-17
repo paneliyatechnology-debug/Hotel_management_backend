@@ -317,8 +317,7 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
 
     res.status(200).json({
       success: true,
-      message: 'Password reset OTP has been sent to your registered email.',
-      otp: process.env.NODE_ENV !== 'production' ? otp : undefined,
+      message: 'Password reset OTP has been sent securely to your registered email.',
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });

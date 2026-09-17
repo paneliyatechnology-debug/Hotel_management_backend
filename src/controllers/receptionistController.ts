@@ -11,6 +11,7 @@ import sendEmail from '../utils/sendEmail';
 import logAuditAction from '../utils/auditLogger';
 import { paymentReceiptTemplate } from '../utils/emailTemplates';
 import { extractAndVerifyAadhaarOCR, extractAndVerifyDrivingLicense } from '../utils/surepassService';
+import { emitToHotel } from '../utils/socketService';
 
 // @desc    Helper to auto-resolve rooms whose 15-minute cleaning timer expired
 export const resolveCleaningRooms = async (hotelId: any): Promise<void> => {
@@ -23,6 +24,7 @@ export const resolveCleaningRooms = async (hotelId: any): Promise<void> => {
       if (now - startedAt >= durationMs) {
         r.status = 'AVAILABLE';
         await r.save();
+        emitToHotel(hotelId, 'ROOM_UPDATED', { roomId: r._id, roomNumber: r.roomNumber, status: 'AVAILABLE' });
       }
     }
   } catch (err) {
@@ -253,6 +255,7 @@ export const registerGuest = async (req: AuthenticatedRequest, res: Response): P
       });
     }
 
+    emitToHotel(req.hotelId, 'GUEST_UPDATED', { guestId: guest._id, fullName: guest.fullName });
     res.status(200).json({ success: true, message: 'Guest details saved.', data: guest });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -285,6 +288,7 @@ export const verifyGuestId = async (req: AuthenticatedRequest, res: Response): P
       });
     }
 
+    emitToHotel(req.hotelId, 'GUEST_UPDATED', { guestId: guest._id, fullName: guest.fullName, status });
     res.status(200).json({ success: true, message: `Guest ID verification marked as ${status}.`, data: guest });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -489,6 +493,32 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
       });
     }
 
+    // Real-Time Multi-Tenant Socket Broadcasts
+    emitToHotel(req.hotelId, 'BOOKING_CREATED', {
+      bookingId: booking._id,
+      bookingNumber: booking.bookingNumber,
+      guestName: guest.fullName,
+      roomNumber: room.roomNumber,
+      status: booking.status,
+      totalAmount,
+      paidAmount: advancePaid,
+    });
+    emitToHotel(req.hotelId, 'ROOM_UPDATED', {
+      roomId: room._id,
+      roomNumber: room.roomNumber,
+      status: isInstantCheckIn ? 'OCCUPIED' : room.status,
+      guestName: isInstantCheckIn ? guest.fullName : undefined,
+    });
+    emitToHotel(req.hotelId, 'DASHBOARD_SYNC', { type: isInstantCheckIn ? 'CHECK_IN' : 'NEW_BOOKING' });
+    if (advancePaid > 0) {
+      emitToHotel(req.hotelId, 'PAYMENT_RECORDED', {
+        receiptNumber,
+        amount: advancePaid,
+        method: cleanPaymentMethod,
+        bookingNumber: booking.bookingNumber,
+      });
+    }
+
     res.status(201).json({
       success: true,
       message: isInstantCheckIn
@@ -541,6 +571,14 @@ export const addBookingCharge = async (req: AuthenticatedRequest, res: Response)
     booking.totalAmount += totalCharge;
     booking.dueAmount += totalCharge;
     await booking.save();
+
+    emitToHotel(req.hotelId, 'BOOKING_UPDATED', {
+      bookingId: booking._id,
+      bookingNumber: booking.bookingNumber,
+      newTotal: booking.totalAmount,
+      newDue: booking.dueAmount,
+    });
+    emitToHotel(req.hotelId, 'DASHBOARD_SYNC', { type: 'CHARGE_ADDED' });
 
     res.status(201).json({
       success: true,
@@ -648,6 +686,27 @@ export const processCheckOut = async (req: AuthenticatedRequest, res: Response):
         module: 'BOOKINGS',
         entityId: booking.bookingNumber,
         newValue: { totalAmount: booking.totalAmount, roomStatus: 'CLEANING' },
+      });
+    }
+
+    // Real-Time Multi-Tenant Socket Broadcasts
+    emitToHotel(req.hotelId, 'GUEST_CHECKED_OUT', {
+      bookingNumber: booking.bookingNumber,
+      roomNumber: roomObj?.roomNumber,
+      guestName: guestObj?.fullName,
+    });
+    emitToHotel(req.hotelId, 'ROOM_UPDATED', {
+      roomId: booking.room,
+      roomNumber: roomObj?.roomNumber,
+      status: 'CLEANING',
+    });
+    emitToHotel(req.hotelId, 'DASHBOARD_SYNC', { type: 'CHECK_OUT' });
+    if (paidNow > 0) {
+      emitToHotel(req.hotelId, 'PAYMENT_RECORDED', {
+        receiptNumber,
+        amount: paidNow,
+        method: cleanPaymentMethod,
+        bookingNumber: booking.bookingNumber,
       });
     }
 
@@ -1250,6 +1309,19 @@ export const recordDirectPayment = async (req: AuthenticatedRequest, res: Respon
         },
       });
     }
+
+    emitToHotel(req.hotelId, 'PAYMENT_RECORDED', {
+      payment,
+      receiptNumber,
+      bookingNumber: booking.bookingNumber,
+      amount: payAmt,
+    });
+    emitToHotel(req.hotelId, 'BOOKING_UPDATED', {
+      bookingId: booking._id,
+      dueAmount: booking.dueAmount,
+      paidAmount: booking.paidAmount,
+    });
+    emitToHotel(req.hotelId, 'DASHBOARD_SYNC', { type: 'PAYMENT' });
 
     res.status(201).json({
       success: true,

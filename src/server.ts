@@ -1,8 +1,10 @@
+import http from 'http';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import connectDB from './config/db';
+import { initSocket } from './utils/socketService';
 
 // Route Imports
 import authRoutes from './routes/authRoutes';
@@ -19,6 +21,10 @@ dotenv.config();
 connectDB();
 
 const app = express();
+const httpServer = http.createServer(app);
+
+// Initialize Real-Time WebSockets
+initSocket(httpServer);
 
 // Universal CORS Configuration (Allows Vercel, Localhost, Render, Network IPs & Custom Domains)
 app.use(
@@ -55,6 +61,7 @@ app.get('/', (req: Request, res: Response) => {
     status: 'success',
     name: 'Multi-Tenant Hotel Management SaaS API',
     version: '1.0.0',
+    realTime: 'Socket.io Active',
     modules: {
       auth: '/api/v1/auth',
       publicHotels: '/api/v1/hotels',
@@ -68,6 +75,6 @@ app.get('/', (req: Request, res: Response) => {
 
 const PORT: string | number = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`🚀 Multi-Tenant Hotel Management Server running on port ${PORT}`);
+httpServer.listen(PORT, () => {
+  console.log(`🚀 Multi-Tenant Hotel Management Server & Socket.io running on port ${PORT}`);
 });
