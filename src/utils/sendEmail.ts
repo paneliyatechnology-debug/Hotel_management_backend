@@ -11,10 +11,11 @@ export interface EmailOptions {
 }
 
 /**
- * 🚀 High-Reliability Hybrid Email Dispatcher (Railway & Render Cloud Optimized)
- * 1. Primary: Resend HTTPS REST API (Port 443 - NEVER blocked by Railway/Render firewalls)
- * 2. Secondary: Nodemailer Gmail/SMTP with strict 3.5s connection timeout
- * 3. Fallback: Cloud Server Terminal Audit Logger (Ensures OTP/Tokens are never lost)
+ * 🚀 High-Reliability Multi-Provider Email Dispatcher (Railway & Render Cloud Optimized)
+ * 1. Primary: Brevo (Sendinblue) REST API (Port 443 - Sends to ANY email with NO domain verification requirement)
+ * 2. Secondary: Resend HTTPS REST API (Port 443)
+ * 3. Tertiary: Nodemailer Gmail/SMTP with strict 3.5s connection timeout
+ * 4. Fallback: Cloud Server Terminal Audit Logger (Ensures OTP/Tokens are never lost)
  */
 export const sendEmail = async (options: EmailOptions): Promise<void> => {
   dotenv.config();
@@ -25,7 +26,41 @@ export const sendEmail = async (options: EmailOptions): Promise<void> => {
     return;
   }
 
-  // 1. Check for Resend API Key (Best for Cloud Deployments like Render / Railway)
+  // 1. Check for Brevo API Key (Sends to ANY email address without domain restrictions!)
+  const brevoApiKey = process.env.BREVO_API_KEY;
+  if (brevoApiKey) {
+    try {
+      const senderEmail = process.env.BREVO_SENDER_EMAIL || process.env.SMTP_EMAIL || 'jatinkakadiya01@gmail.com';
+      const senderName = process.env.FROM_NAME || 'The Grand Royale Hotel';
+
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'api-key': brevoApiKey,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: senderName, email: senderEmail },
+          to: [{ email: recipient }],
+          subject: options.subject,
+          htmlContent: options.html || options.message || '',
+          textContent: options.message || undefined,
+        }),
+      });
+
+      const resData: any = await response.json().catch(() => ({}));
+      if (response.ok) {
+        console.log(`🚀 [Brevo API] Email delivered via Port 443 to: ${recipient} (ID: ${resData?.messageId})`);
+        return;
+      }
+      console.warn('⚠️ [Brevo API] Error response, trying secondary providers:', resData);
+    } catch (brevoErr: any) {
+      console.warn('⚠️ [Brevo API] Exception, attempting next provider:', brevoErr?.message);
+    }
+  }
+
+  // 2. Check for Resend API Key
   const resendApiKey = process.env.RESEND_API_KEY;
   if (resendApiKey) {
     try {
@@ -50,7 +85,7 @@ export const sendEmail = async (options: EmailOptions): Promise<void> => {
     }
   }
 
-  // 2. Secondary: Nodemailer SMTP with strict connection timeouts
+  // 3. Nodemailer SMTP with strict connection timeouts
   const user = (process.env.SMTP_EMAIL || 'jatinkakadiya01@gmail.com').trim();
   const pass = (process.env.SMTP_PASSWORD || 'edvhnjyfzsjduscd').replace(/\s+/g, '');
 
@@ -58,7 +93,7 @@ export const sendEmail = async (options: EmailOptions): Promise<void> => {
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: Number(process.env.SMTP_PORT) || 465,
-      secure: Number(process.env.SMTP_PORT) === 465 || !process.env.SMTP_PORT, // true for 465, false for 587
+      secure: Number(process.env.SMTP_PORT) === 465 || !process.env.SMTP_PORT,
       auth: {
         user: user,
         pass: pass,
@@ -81,7 +116,7 @@ export const sendEmail = async (options: EmailOptions): Promise<void> => {
   } catch (smtpErr: any) {
     console.error(`❌ [Email Delivery Notice] SMTP blocked or timed out on cloud network (${smtpErr?.message || 'Network Timeout'}).`);
     
-    // 3. Fallback Terminal Log for OTP / Tokens (so developer/admin can instantly see it in Render/Railway logs)
+    // 4. Fallback Terminal Log for OTP / Tokens (so developer/admin can instantly see it in Render/Railway logs)
     const content = options.html || options.message || '';
     const otpMatch = content.match(/\b\d{4,6}\b/);
     if (otpMatch) {
