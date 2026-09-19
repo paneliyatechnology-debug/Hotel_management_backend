@@ -18,6 +18,8 @@ export const initSocket = (httpServer: HttpServer): Server => {
   });
 
   io.on('connection', (socket: Socket) => {
+    console.log(`🔌 [Socket.io] Client connected: ${socket.id}`);
+
     // 1. Hotel Room Registration
     socket.on('join_hotel', (data: { hotelId?: string; token?: string }) => {
       let targetHotelId = data?.hotelId;
@@ -35,6 +37,7 @@ export const initSocket = (httpServer: HttpServer): Server => {
       if (targetHotelId) {
         const roomName = `hotel_${targetHotelId}`;
         socket.join(roomName);
+        console.log(`🏨 [Socket.io] Socket ${socket.id} joined room: ${roomName}`);
         socket.emit('joined_room', { room: roomName, success: true, timestamp: Date.now() });
       }
     });
@@ -42,6 +45,7 @@ export const initSocket = (httpServer: HttpServer): Server => {
     // 2. Super Admin Global Management Room
     socket.on('join_super_admin', () => {
       socket.join('super_admin_room');
+      console.log(`👑 [Socket.io] Socket ${socket.id} joined super_admin_room`);
       socket.emit('joined_room', { room: 'super_admin_room', success: true });
     });
 
@@ -49,11 +53,12 @@ export const initSocket = (httpServer: HttpServer): Server => {
     socket.on('join_public_hotel', (data: { hotelId: string }) => {
       if (data?.hotelId) {
         socket.join(`public_hotel_${data.hotelId}`);
+        console.log(`🌐 [Socket.io] Socket ${socket.id} joined public_hotel_${data.hotelId}`);
       }
     });
 
-    socket.on('disconnect', () => {
-      // Clean disconnect
+    socket.on('disconnect', (reason) => {
+      console.log(`❌ [Socket.io] Client disconnected: ${socket.id} (Reason: ${reason})`);
     });
   });
 
@@ -70,6 +75,7 @@ export const getIO = (): Server | null => {
 export const emitToHotel = (hotelId: string | any, event: string, payload: any = {}): void => {
   if (!io || !hotelId) return;
   const hIdStr = hotelId._id ? hotelId._id.toString() : hotelId.toString();
+  console.log(`⚡ [Socket.io] Emitting '${event}' to hotel_${hIdStr}`);
   io.to(`hotel_${hIdStr}`).emit(event, { ...payload, hotelId: hIdStr, timestamp: Date.now() });
   // Also notify public website viewers if room availability changes
   io.to(`public_hotel_${hIdStr}`).emit(event, { ...payload, hotelId: hIdStr, timestamp: Date.now() });
@@ -80,6 +86,7 @@ export const emitToHotel = (hotelId: string | any, event: string, payload: any =
  */
 export const emitToSuperAdmin = (event: string, payload: any = {}): void => {
   if (!io) return;
+  console.log(`⚡ [Socket.io] Emitting '${event}' to super_admin_room`);
   io.to('super_admin_room').emit(event, { ...payload, timestamp: Date.now() });
 };
 
@@ -88,5 +95,6 @@ export const emitToSuperAdmin = (event: string, payload: any = {}): void => {
  */
 export const emitGlobal = (event: string, payload: any = {}): void => {
   if (!io) return;
+  console.log(`⚡ [Socket.io] Global broadcast '${event}'`);
   io.emit(event, { ...payload, timestamp: Date.now() });
 };
