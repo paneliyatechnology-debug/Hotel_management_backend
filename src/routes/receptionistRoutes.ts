@@ -16,7 +16,7 @@ import {
   ocrVerifyGovtId,
   directVerifyDrivingLicense,
 } from '../controllers/receptionistController';
-import { updateRoomStatus } from '../controllers/hotelAdminController';
+import { getRoomTypes, createRoom, updateRoom, deleteRoom, updateRoomStatus } from '../controllers/hotelAdminController';
 import {
   authenticateUser,
   requireRole,
@@ -36,6 +36,8 @@ router.use(
 
 router.get('/dashboard', getReceptionistDashboard);
 router.get('/rooms/available', getAvailableRooms);
+router.get('/room-types', getRoomTypes);
+router.delete('/rooms/:id', deleteRoom);
 router.put('/rooms/:id/status', updateRoomStatus);
 
 // Guests & ID Proof Verification

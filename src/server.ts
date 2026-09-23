@@ -1,3 +1,4 @@
+import 'dotenv/config'; // 🚀 Load Environment Variables Immediately
 import http from 'http';
 import express, { Request, Response } from 'express';
 import cors from 'cors';

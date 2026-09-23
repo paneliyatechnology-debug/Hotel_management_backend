@@ -9,6 +9,8 @@ export interface IRoomType extends Document {
     adults: number;
     children: number;
   };
+  bedCount?: number;
+  bedType?: string;
   amenities: string[];
   images: string[];
   isActive: boolean;
@@ -27,6 +29,8 @@ const roomTypeSchema = new Schema<IRoomType>(
       adults: { type: Number, default: 2, min: 1 },
       children: { type: Number, default: 1, min: 0 },
     },
+    bedCount: { type: Number, default: 1 },
+    bedType: { type: String, default: '1 King Bed' },
     amenities: { type: [String], default: ['Free WiFi', 'LED TV', 'Mini Fridge', 'Attached Bathroom'] },
     images: { type: [String], default: [] },
     isActive: { type: Boolean, default: true },

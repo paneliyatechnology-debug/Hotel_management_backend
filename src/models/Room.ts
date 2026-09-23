@@ -9,8 +9,11 @@ export interface IRoom extends Document {
   floor: number;
   status: RoomStatus;
   seatingCapacity?: number;
+  bedCount?: number;
+  bedType?: string;
   customPricePerNight?: number;
   notes?: string;
+  amenities?: string[];
   cleaningStartedAt?: Date;
   cleaningDurationMinutes?: number;
   isActive: boolean;
@@ -32,8 +35,11 @@ const roomSchema = new Schema<IRoom>(
       index: true,
     },
     seatingCapacity: { type: Number, default: 2 },
+    bedCount: { type: Number, default: 1 },
+    bedType: { type: String, default: '1 King Bed' },
     customPricePerNight: { type: Number },
     notes: { type: String, default: '' },
+    amenities: { type: [String], default: [] },
     cleaningStartedAt: { type: Date },
     cleaningDurationMinutes: { type: Number, default: 15 },
     isActive: { type: Boolean, default: true },

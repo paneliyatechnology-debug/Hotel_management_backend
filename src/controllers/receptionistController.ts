@@ -9,9 +9,10 @@ import Payment from '../models/Payment';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import sendEmail from '../utils/sendEmail';
 import logAuditAction from '../utils/auditLogger';
-import { paymentReceiptTemplate } from '../utils/emailTemplates';
+import { paymentReceiptTemplate, guestBookingConfirmationTemplate } from '../utils/emailTemplates';
 import { extractAndVerifyAadhaarOCR, extractAndVerifyDrivingLicense } from '../utils/surepassService';
 import { emitToHotel } from '../utils/socketService';
+import { uploadToCloudinary } from '../utils/cloudinary';
 
 // @desc    Helper to auto-resolve rooms whose 15-minute cleaning timer expired
 export const resolveCleaningRooms = async (hotelId: any): Promise<void> => {
@@ -340,19 +341,43 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
     const cleanGuestIdType = normalizeIdType(guestIdType);
     const reusePreviousId = req.body.reusePreviousId === true || req.body.reusePreviousId === 'true';
 
-    // Parse accompanying members
+    // Cloudinary ID Proofs upload for Main Guest
+    let uploadedFrontImage = req.body.frontImage || '';
+    let uploadedBackImage = req.body.backImage || '';
+    if (uploadedFrontImage && uploadedFrontImage.startsWith('data:image')) {
+      uploadedFrontImage = await uploadToCloudinary(uploadedFrontImage, 'hotel_guest_documents/main');
+    }
+    if (uploadedBackImage && uploadedBackImage.startsWith('data:image')) {
+      uploadedBackImage = await uploadToCloudinary(uploadedBackImage, 'hotel_guest_documents/main');
+    }
+
+    // Parse and upload accompanying members ID photos
     const rawMembers = Array.isArray(accompanyingGuests) && accompanyingGuests.length > 0 
       ? accompanyingGuests 
       : Array.isArray(members) ? members : [];
-    const sanitizedMembers = rawMembers.map((m: any) => ({
-      name: (m.name || m.fullName || '').trim(),
-      age: m.age ? Number(m.age) : undefined,
-      gender: m.gender || 'Male',
-      relationship: m.relationship || 'Family',
-      idType: normalizeIdType(m.idType || m.govtIdType),
-      idNumber: (m.idNumber || m.govtIdNumber || '').trim(),
-      frontImage: m.frontImage || m.idProofImage || '',
-    })).filter((m: any) => m.name.length > 0);
+    const sanitizedMembers = await Promise.all(
+      rawMembers.map(async (m: any) => {
+        let memberFront = m.frontImage || m.idProofImage || '';
+        let memberBack = m.backImage || '';
+        if (memberFront && memberFront.startsWith('data:image')) {
+          memberFront = await uploadToCloudinary(memberFront, 'hotel_guest_documents/members');
+        }
+        if (memberBack && memberBack.startsWith('data:image')) {
+          memberBack = await uploadToCloudinary(memberBack, 'hotel_guest_documents/members');
+        }
+        return {
+          name: (m.name || m.fullName || '').trim(),
+          age: m.age ? Number(m.age) : undefined,
+          gender: m.gender || 'Male',
+          relationship: m.relationship || 'Family',
+          idType: normalizeIdType(m.idType || m.govtIdType),
+          idNumber: (m.idNumber || m.govtIdNumber || '').trim(),
+          frontImage: memberFront,
+          backImage: memberBack,
+        };
+      })
+    );
+    const filteredMembers = sanitizedMembers.filter((m: any) => m.name.length > 0);
 
     let guest: any = null;
     let isReturningGuest = false;
@@ -375,8 +400,8 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
         guest.idProof = {
           idType: cleanGuestIdType,
           idNumber: guestIdNum,
-          frontImage: req.body.frontImage || guest.idProof?.frontImage || '',
-          backImage: req.body.backImage || guest.idProof?.backImage || '',
+          frontImage: uploadedFrontImage || guest.idProof?.frontImage || '',
+          backImage: uploadedBackImage || guest.idProof?.backImage || '',
           verificationStatus: 'VERIFIED',
           verifiedBy: req.user?._id as any,
           verifiedAt: new Date(),
@@ -386,6 +411,8 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
         guest.idProof = {
           idType: cleanGuestIdType,
           idNumber: guestIdNum || 'PENDING',
+          frontImage: uploadedFrontImage || guest.idProof?.frontImage || '',
+          backImage: uploadedBackImage || guest.idProof?.backImage || '',
           verificationStatus: guestIdNum && guestIdNum !== 'PENDING' ? 'VERIFIED' : 'PENDING',
         };
       }
@@ -399,6 +426,8 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
         idProof: {
           idType: cleanGuestIdType,
           idNumber: guestIdNum,
+          frontImage: uploadedFrontImage || '',
+          backImage: uploadedBackImage || '',
           verificationStatus: guestIdNum && guestIdNum !== 'PENDING' ? 'VERIFIED' : 'PENDING',
           verifiedBy: req.user?._id as any,
           verifiedAt: new Date(),
@@ -580,6 +609,70 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
         amount: advancePaid,
         method: cleanPaymentMethod,
         bookingNumber: booking.bookingNumber,
+      });
+    }
+
+    // 📧 Asynchronous Welcome & Booking Confirmation Email to Main Guest
+    const recipientGuestEmail = guest.email || guestEmail;
+    if (recipientGuestEmail && recipientGuestEmail.includes('@')) {
+      const amenitiesSet = new Set<string>();
+      allocatedRooms.forEach((r: any) => {
+        if (Array.isArray(r.amenities)) r.amenities.forEach((a: string) => a && amenitiesSet.add(a));
+        if (r.roomType && Array.isArray(r.roomType.amenities)) r.roomType.amenities.forEach((a: string) => a && amenitiesSet.add(a));
+      });
+      if (req.hotel && Array.isArray((req.hotel as any).amenities)) {
+        (req.hotel as any).amenities.forEach((a: string) => a && amenitiesSet.add(a));
+      }
+      if (req.hotel?.settings && Array.isArray(req.hotel.settings.amenities)) {
+        req.hotel.settings.amenities.forEach((a: string) => a && amenitiesSet.add(a));
+      }
+
+      const policiesList = Array.isArray(req.hotel?.settings?.policies) && req.hotel?.settings?.policies.length > 0
+        ? req.hotel?.settings?.policies
+        : [
+            'Standard Check-Out is strictly 12:00 PM (Noon).',
+            'Government photo ID is required for all staying guests.',
+            'All indoor rooms and corridors are 100% smoke-free zones.',
+            'Quiet hours are observed between 10:00 PM and 07:00 AM.',
+            'Please keep valuables in the in-room safe.',
+            'Dial 0 from room intercom for 24/7 Front Desk assistance.',
+          ];
+
+      sendEmail({
+        email: recipientGuestEmail,
+        subject: `🏨 Stay Confirmation & Pass - Room #${combinedRoomNumbers} at ${req.hotel?.name || 'The Hotel'}`,
+        html: guestBookingConfirmationTemplate({
+          hotelName: req.hotel?.name || 'The Grand Royale Hotel',
+          hotelAddress: req.hotel?.address || '',
+          hotelPhone: req.hotel?.ownerPhone || '',
+          hotelEmail: req.hotel?.ownerEmail || '',
+          guestName: guest.fullName,
+          guestEmail: recipientGuestEmail,
+          guestPhone: guest.mobileNumber || '',
+          bookingNumber: booking.bookingNumber,
+          roomNumbers: combinedRoomNumbers,
+          roomCategory: primaryRoom.roomType?.name || primaryRoom.category || 'Standard Room',
+          bedType: primaryRoom.bedType || primaryRoom.roomType?.bedType || '1 King Bed',
+          checkInDate: cInDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }),
+          checkInTime: inTimeStr,
+          checkOutDate: cOutDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }),
+          checkOutTime: '12:00 PM (Noon)',
+          numberOfNights,
+          totalGuests: Math.max(1, Number(adults) || 1) + Number(children || 0) + filteredMembers.length,
+          adults: Math.max(1, Number(adults) || 1),
+          children: Number(children) || 0,
+          accompanyingMembers: filteredMembers.map((m: any) => m.name),
+          totalAmount,
+          paidAmount: advancePaid,
+          dueAmount,
+          securityDeposit: depositAmt,
+          paymentMethod: cleanPaymentMethod,
+          amenities: Array.from(amenitiesSet),
+          rulesAndInstructions: policiesList,
+          specialRequests: specialRequests || '',
+        }),
+      }).catch((emailErr: any) => {
+        console.warn('⚠️ [sendEmail] Failed to send guest booking confirmation email:', emailErr.message);
       });
     }
 
@@ -1448,11 +1541,20 @@ export const ocrVerifyGovtId = async (req: AuthenticatedRequest, res: Response):
     }
 
     if (updatedGuest) {
+      let ocrFront = frontImage;
+      let ocrBack = backImage;
+      if (ocrFront && ocrFront.startsWith('data:image')) {
+        ocrFront = await uploadToCloudinary(ocrFront, 'hotel_guest_documents/main');
+      }
+      if (ocrBack && ocrBack.startsWith('data:image')) {
+        ocrBack = await uploadToCloudinary(ocrBack, 'hotel_guest_documents/main');
+      }
+
       updatedGuest.idProof = {
         idType: result.data.idType,
         idNumber: result.data.idNumber,
-        frontImage: frontImage || updatedGuest.idProof?.frontImage || '',
-        backImage: backImage || updatedGuest.idProof?.backImage || '',
+        frontImage: ocrFront || updatedGuest.idProof?.frontImage || '',
+        backImage: ocrBack || updatedGuest.idProof?.backImage || '',
         verificationStatus: 'VERIFIED',
         verifiedBy: req.user?._id as any,
         verifiedAt: new Date(),

@@ -31,6 +31,7 @@ export interface IBooking extends Document {
     idType?: string;
     idNumber?: string;
     frontImage?: string;
+    backImage?: string;
   }>;
   
   // Financial Breakdown
@@ -81,6 +82,7 @@ const bookingSchema = new Schema<IBooking>(
         idType: { type: String, default: 'AADHAAR' },
         idNumber: { type: String, default: '' },
         frontImage: { type: String, default: '' },
+        backImage: { type: String, default: '' },
       },
     ],
     baseAmount: { type: Number, required: true, min: 0 },

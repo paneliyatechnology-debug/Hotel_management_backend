@@ -3,6 +3,7 @@ import {
   getHotelAdminDashboard,
   getRoomTypes,
   createRoomType,
+  updateRoomType,
   deleteRoomType,
   getRooms,
   createRoom,
@@ -42,6 +43,7 @@ router.get('/dashboard', getHotelAdminDashboard);
 // Room Types & Rooms
 router.get('/room-types', getRoomTypes);
 router.post('/room-types', createRoomType);
+router.put('/room-types/:id', updateRoomType);
 router.delete('/room-types/:id', deleteRoomType);
 router.get('/rooms', getRooms);
 router.post('/rooms', createRoom);

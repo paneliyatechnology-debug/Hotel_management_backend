@@ -104,7 +104,7 @@ export const registerHotel = async (req: Request, res: Response): Promise<void> 
       await adminUser.save();
     }
 
-    const loginUrl = process.env.ADMIN_URL || 'http://localhost:3001';
+    const loginUrl = process.env.ADMIN_URL || 'https://hotel-management-admin-livid.vercel.app';
 
     // Send Credentials Email to Hotel Owner asynchronously (non-blocking)
     sendEmail({

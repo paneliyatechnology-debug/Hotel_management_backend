@@ -177,7 +177,7 @@ export const getHotelProfile = async (req: AuthenticatedRequest, res: Response):
 
 export const createRoomType = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { name, description, basePrice, capacity, amenities, images } = req.body;
+    const { name, description, basePrice, capacity, bedCount, bedType, amenities, images } = req.body;
     if (!name || !basePrice) {
       res.status(400).json({ success: false, message: 'Room type name and base price are required.' });
       return;
@@ -189,13 +189,46 @@ export const createRoomType = async (req: AuthenticatedRequest, res: Response): 
       description,
       basePrice,
       capacity: capacity || { adults: 2, children: 1 },
+      bedCount: Number(bedCount) || 1,
+      bedType: bedType || '1 King Bed',
       amenities: amenities || [],
       images: images || [],
       isActive: true,
       isDeleted: false,
     });
 
+    emitToHotel(req.hotelId, 'DASHBOARD_SYNC', { type: 'ROOM_TYPE_CREATED' });
+
     res.status(201).json({ success: true, data: roomType });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const updateRoomType = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { name, description, basePrice, capacity, bedCount, bedType, amenities, images, isActive } = req.body;
+    const roomType = await RoomType.findOne({ _id: req.params.id, hotel: req.hotelId, isDeleted: { $ne: true } });
+    if (!roomType) {
+      res.status(404).json({ success: false, message: 'Room category not found.' });
+      return;
+    }
+
+    if (name) roomType.name = name;
+    if (description !== undefined) roomType.description = description;
+    if (basePrice !== undefined) roomType.basePrice = Number(basePrice);
+    if (capacity) roomType.capacity = { adults: Number(capacity.adults || 2), children: Number(capacity.children || 1) };
+    if (bedCount !== undefined) roomType.bedCount = Number(bedCount);
+    if (bedType !== undefined) roomType.bedType = bedType;
+    if (amenities !== undefined) roomType.amenities = Array.isArray(amenities) ? amenities : [];
+    if (images !== undefined) roomType.images = images;
+    if (isActive !== undefined) roomType.isActive = Boolean(isActive);
+
+    await roomType.save();
+
+    emitToHotel(req.hotelId, 'DASHBOARD_SYNC', { type: 'ROOM_TYPE_UPDATED' });
+
+    res.status(200).json({ success: true, message: `Room category '${roomType.name}' updated successfully.`, data: roomType });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -235,7 +268,7 @@ export const getRooms = async (req: AuthenticatedRequest, res: Response): Promis
 
 export const createRoom = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { roomNumber, roomType, floor, seatingCapacity, customPricePerNight, notes, status } = req.body;
+    const { roomNumber, roomType, floor, seatingCapacity, bedCount, bedType, customPricePerNight, notes, amenities, status } = req.body;
     if (!roomNumber || !roomType) {
       res.status(400).json({ success: false, message: 'Room number and room category are required.' });
       return;
@@ -252,9 +285,12 @@ export const createRoom = async (req: AuthenticatedRequest, res: Response): Prom
       existingRoom.roomType = roomType;
       existingRoom.floor = Number(floor) || 1;
       existingRoom.seatingCapacity = Number(seatingCapacity) || 2;
+      existingRoom.bedCount = Number(bedCount) || 1;
+      existingRoom.bedType = bedType || '1 King Bed';
       existingRoom.status = status || 'AVAILABLE';
       existingRoom.customPricePerNight = customPricePerNight ? Number(customPricePerNight) : undefined;
       existingRoom.notes = notes || '';
+      existingRoom.amenities = Array.isArray(amenities) ? amenities : [];
       existingRoom.isActive = true;
       existingRoom.isDeleted = false;
       await existingRoom.save();
@@ -266,9 +302,12 @@ export const createRoom = async (req: AuthenticatedRequest, res: Response): Prom
         roomType,
         floor: Number(floor) || 1,
         seatingCapacity: Number(seatingCapacity) || 2,
+        bedCount: Number(bedCount) || 1,
+        bedType: bedType || '1 King Bed',
         status: status || 'AVAILABLE',
         customPricePerNight: customPricePerNight ? Number(customPricePerNight) : undefined,
         notes: notes || '',
+        amenities: Array.isArray(amenities) ? amenities : [],
         isActive: true,
         isDeleted: false,
       });
@@ -296,7 +335,7 @@ export const createRoom = async (req: AuthenticatedRequest, res: Response): Prom
 
 export const updateRoom = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { roomNumber, roomType, floor, seatingCapacity, customPricePerNight, notes, status } = req.body;
+    const { roomNumber, roomType, floor, seatingCapacity, bedCount, bedType, customPricePerNight, notes, amenities, status } = req.body;
     const room = await Room.findOne({ _id: req.params.id, hotel: req.hotelId, isDeleted: { $ne: true } });
     if (!room) {
       res.status(404).json({ success: false, message: 'Room not found.' });
@@ -315,8 +354,11 @@ export const updateRoom = async (req: AuthenticatedRequest, res: Response): Prom
     if (roomType) room.roomType = roomType;
     if (floor !== undefined) room.floor = Number(floor);
     if (seatingCapacity !== undefined) room.seatingCapacity = Number(seatingCapacity);
+    if (bedCount !== undefined) room.bedCount = Number(bedCount);
+    if (bedType !== undefined) room.bedType = bedType;
     if (customPricePerNight !== undefined) room.customPricePerNight = customPricePerNight ? Number(customPricePerNight) : undefined;
     if (notes !== undefined) room.notes = notes;
+    if (amenities !== undefined) room.amenities = Array.isArray(amenities) ? amenities : [];
     if (status) room.status = status;
 
     await room.save();
@@ -478,7 +520,7 @@ export const createReceptionist = async (req: AuthenticatedRequest, res: Respons
     });
 
     // Send credentials email
-    const loginUrl = process.env.ADMIN_URL || 'http://localhost:3001/login';
+    const loginUrl = process.env.ADMIN_URL || 'https://hotel-management-admin-livid.vercel.app/login';
     try {
       await sendEmail({
         email: staffMember.email,
@@ -701,9 +743,37 @@ export const deleteRoomType = async (req: AuthenticatedRequest, res: Response): 
       return;
     }
 
+    // 🔒 Check all active non-deleted rooms belonging to this category
+    const activeRooms = await Room.find({ hotel: req.hotelId, roomType: roomType._id, isDeleted: { $ne: true } });
+    
+    // Check if any room is busy / occupied / cleaning / maintenance / blocked
+    const busyRooms = activeRooms.filter((r) => r.status !== 'AVAILABLE');
+    if (busyRooms.length > 0) {
+      const busyList = busyRooms.map((r) => `Room ${r.roomNumber} (${r.status})`).join(', ');
+      res.status(400).json({
+        success: false,
+        message: `Cannot delete Category '${roomType.name}' because ${busyRooms.length} room(s) are currently not AVAILABLE (${busyList}). Rooms must be available and not booked or under housekeeping/cleaning to delete.`,
+      });
+      return;
+    }
+
+    // Check for any active ongoing bookings for this category
+    const activeBooking = await Booking.findOne({
+      hotel: req.hotelId,
+      roomType: roomType._id,
+      status: { $in: ['CHECKED_IN', 'RESERVED', 'CONFIRMED'] },
+    });
+    if (activeBooking) {
+      res.status(400).json({
+        success: false,
+        message: `Cannot delete Category '${roomType.name}' because active bookings (${activeBooking.status}) exist under this category.`,
+      });
+      return;
+    }
+
     if (isPermanent) {
       // Data Integrity Check: Prevent hard deletion if rooms or bookings reference this room type
-      const linkedRoomsCount = await Room.countDocuments({ hotel: req.hotelId, roomType: roomType._id, isDeleted: { $ne: true } });
+      const linkedRoomsCount = activeRooms.length;
       const linkedBookingsCount = await Booking.countDocuments({ hotel: req.hotelId, roomType: roomType._id });
 
       if (linkedRoomsCount > 0 || linkedBookingsCount > 0) {
@@ -734,6 +804,36 @@ export const deleteRoom = async (req: AuthenticatedRequest, res: Response): Prom
     const room = await Room.findOne({ _id: req.params.id, hotel: req.hotelId });
     if (!room) {
       res.status(404).json({ success: false, message: 'Room not found.' });
+      return;
+    }
+
+    // 🔒 STRICT STATUS CHECK: Room must be in AVAILABLE status
+    if (room.status !== 'AVAILABLE') {
+      let statusDetail: string = room.status;
+      if (room.status === 'OCCUPIED') statusDetail = 'OCCUPIED (Guest is currently checked-in)';
+      else if (room.status === 'RESERVED') statusDetail = 'RESERVED (Guest booking confirmed)';
+      else if (room.status === 'CLEANING') statusDetail = 'CLEANING (Housekeeping turnaround in progress)';
+      else if (room.status === 'MAINTENANCE') statusDetail = 'MAINTENANCE (Repair work in progress)';
+      else if (room.status === 'BLOCKED') statusDetail = 'BLOCKED (Admin lock)';
+
+      res.status(400).json({
+        success: false,
+        message: `Cannot delete Room ${room.roomNumber} because it is currently '${statusDetail}'. Only 'AVAILABLE' rooms can be deleted.`,
+      });
+      return;
+    }
+
+    // Check for any active ongoing bookings for this specific room
+    const activeBooking = await Booking.findOne({
+      hotel: req.hotelId,
+      room: room._id,
+      status: { $in: ['CHECKED_IN', 'RESERVED', 'CONFIRMED'] },
+    });
+    if (activeBooking) {
+      res.status(400).json({
+        success: false,
+        message: `Cannot delete Room ${room.roomNumber} because an active booking (${activeBooking.status}) is assigned to it. Please check-out or cancel the booking first.`,
+      });
       return;
     }
 
