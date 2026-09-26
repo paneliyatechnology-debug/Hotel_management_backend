@@ -566,6 +566,46 @@ export const createReceptionist = async (req: AuthenticatedRequest, res: Respons
   }
 };
 
+export const updateReceptionist = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { name, phone, role, email, shift } = req.body;
+    const staff = await User.findOne({ _id: req.params.id, hotel: req.hotelId });
+    if (!staff) {
+      res.status(404).json({ success: false, message: 'Staff member not found in your hotel.' });
+      return;
+    }
+
+    if (name) staff.name = name;
+    if (phone !== undefined) staff.phone = phone;
+    if (email) staff.email = email.toLowerCase();
+    if (role) {
+      const validRoles = ['RECEPTIONIST', 'MANAGER', 'HOUSEKEEPING', 'ACCOUNTANT'];
+      const normalizedRole = role.toString().trim().toUpperCase();
+      if (validRoles.includes(normalizedRole)) {
+        staff.role = normalizedRole as any;
+      }
+    }
+
+    await staff.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Staff details updated successfully.',
+      data: {
+        _id: staff._id,
+        name: staff.name,
+        email: staff.email,
+        phone: staff.phone,
+        role: staff.role,
+        employeeId: staff.employeeId,
+        status: staff.status,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export const updateReceptionistStatus = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { status } = req.body;

@@ -139,19 +139,19 @@ const sendTokenResponse = async (
         mustChangePassword: user.mustChangePassword,
         hotel: hotelDetails
           ? {
-              _id: hotelDetails._id,
-              name: hotelDetails.name,
-              slug: hotelDetails.slug,
-              status: hotelDetails.status,
-              statusReason: hotelDetails.statusReason,
-              subscription: liveSubscription || hotelDetails.subscription,
-              settings: hotelDetails.settings,
-              supportContact: {
-                phone: '+91 98765 43210',
-                email: 'support@cloudhotelier.com',
-                whatsapp: '+919876543210',
-              },
-            }
+            _id: hotelDetails._id,
+            name: hotelDetails.name,
+            slug: hotelDetails.slug,
+            status: hotelDetails.status,
+            statusReason: hotelDetails.statusReason,
+            subscription: liveSubscription || hotelDetails.subscription,
+            settings: hotelDetails.settings,
+            supportContact: {
+              phone: '+91 98765 43210',
+              email: 'support@cloudhotelier.com',
+              whatsapp: '+919876543210',
+            },
+          }
           : undefined,
       },
     });
@@ -330,13 +330,11 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// @desc    Change Password (for logged-in user - removes mustChangePassword flag)
-// @route   PUT /api/v1/auth/change-password
 export const changePassword = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { currentPassword, newPassword } = req.body;
-    if (!currentPassword || !newPassword) {
-      res.status(400).json({ success: false, message: 'Current password and new password are required.' });
+    if (!newPassword) {
+      res.status(400).json({ success: false, message: 'New password is required.' });
       return;
     }
 
@@ -351,9 +349,15 @@ export const changePassword = async (req: AuthenticatedRequest, res: Response): 
       return;
     }
 
-    const isMatch = await user.matchPassword(currentPassword);
-    if (!isMatch) {
-      res.status(400).json({ success: false, message: 'Current password is incorrect.' });
+    // Verify current password if provided, or require it if not a first-time force reset
+    if (currentPassword) {
+      const isMatch = await user.matchPassword(currentPassword);
+      if (!isMatch) {
+        res.status(400).json({ success: false, message: 'Current password is incorrect.' });
+        return;
+      }
+    } else if (!user.mustChangePassword) {
+      res.status(400).json({ success: false, message: 'Current password is required to change password.' });
       return;
     }
 
@@ -371,8 +375,6 @@ export const changePassword = async (req: AuthenticatedRequest, res: Response): 
   }
 };
 
-// @desc    Forgot Password - Send OTP to Email
-// @route   POST /api/v1/auth/forgot-password
 export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email } = req.body;
