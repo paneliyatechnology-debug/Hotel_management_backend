@@ -272,8 +272,111 @@ export const registerGuest = async (req: AuthenticatedRequest, res: Response): P
       });
     }
 
+    // Multi-room support: Link or allocate room stay details when provided from Hotel Admin or Front Desk
+    const rawRoomIds = Array.isArray(req.body.roomIds) && req.body.roomIds.length > 0
+      ? req.body.roomIds
+      : Array.isArray(req.body.selectedRooms) && req.body.selectedRooms.length > 0
+      ? req.body.selectedRooms.map((r: any) => (typeof r === 'object' ? r._id : r))
+      : [];
+
+    let allocatedRooms: any[] = [];
+    if (rawRoomIds.length > 0) {
+      allocatedRooms = await Room.find({ _id: { $in: rawRoomIds }, hotel: req.hotelId }).populate('roomType');
+    } else {
+      const assignedRoomNum = (req.body.roomAssigned || req.body.roomNumber || '').toString().trim();
+      if (assignedRoomNum && assignedRoomNum !== 'Not Assigned' && assignedRoomNum !== 'N/A') {
+        const roomNumList = assignedRoomNum.split(',').map((s: string) => s.trim()).filter(Boolean);
+        allocatedRooms = await Room.find({ hotel: req.hotelId, roomNumber: { $in: roomNumList }, isDeleted: { $ne: true } }).populate('roomType');
+      }
+    }
+
+    if (allocatedRooms.length > 0) {
+      const primaryRoom = allocatedRooms[0];
+      const roomIdsList = allocatedRooms.map((r: any) => r._id);
+      const roomNumbersList = allocatedRooms.map((r: any) => String(r.roomNumber));
+      const combinedRoomNumbers = roomNumbersList.join(', ');
+
+      const checkIn = req.body.checkInDate ? new Date(req.body.checkInDate) : new Date();
+      const checkOut = req.body.checkOutDate ? new Date(req.body.checkOutDate) : new Date(Date.now() + 86400000 * 2);
+      const stayStatus = req.body.status || 'IN-HOUSE';
+
+      // Calculate total tariff if not explicitly provided
+      const nights = Math.max(1, Math.ceil(Math.abs(checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24)));
+      let autoTotalTariff = 0;
+      allocatedRooms.forEach((r: any) => {
+        autoTotalTariff += (r.customPricePerNight || (r.roomType as any)?.basePrice || 4000) * nights;
+      });
+      const totalAmt = Number(req.body.totalAmount) > 0 ? Number(req.body.totalAmount) : autoTotalTariff;
+
+      let bookingStatus: 'CONFIRMED' | 'CHECKED_IN' | 'CHECKED_OUT' = 'CHECKED_IN';
+      if (stayStatus === 'RESERVED') bookingStatus = 'CONFIRMED';
+      else if (stayStatus === 'CHECKED_OUT' || stayStatus === 'CHECKED-OUT') bookingStatus = 'CHECKED_OUT';
+
+      let booking = await Booking.findOne({
+        hotel: req.hotelId,
+        guest: guest._id,
+        status: { $in: ['CONFIRMED', 'CHECKED_IN'] },
+        isDeleted: { $ne: true },
+      });
+
+      if (booking) {
+        booking.room = primaryRoom._id as any;
+        booking.rooms = roomIdsList as any;
+        booking.roomNumber = combinedRoomNumbers;
+        booking.roomNumbers = roomNumbersList;
+        booking.roomType = (primaryRoom.roomType as any)?._id || primaryRoom.roomType;
+        booking.checkInDate = checkIn;
+        booking.checkOutDate = checkOut;
+        booking.numberOfNights = nights;
+        booking.totalAmount = totalAmt;
+        booking.dueAmount = Math.max(0, totalAmt - (booking.paidAmount || 0));
+        booking.status = bookingStatus;
+        if (Array.isArray(req.body.accompanyingGuests)) {
+          booking.accompanyingGuests = req.body.accompanyingGuests;
+        }
+        await booking.save();
+      } else {
+        await Booking.create({
+          hotel: req.hotelId,
+          bookingNumber: `BK-${Date.now().toString().slice(-6)}`,
+          guest: guest._id,
+          room: primaryRoom._id,
+          rooms: roomIdsList,
+          roomNumber: combinedRoomNumbers,
+          roomNumbers: roomNumbersList,
+          roomType: (primaryRoom.roomType as any)?._id || primaryRoom.roomType,
+          checkInDate: checkIn,
+          checkOutDate: checkOut,
+          checkInTime: req.body.checkInTime || '14:00',
+          checkOutTime: '12:00',
+          numberOfNights: nights,
+          baseAmount: totalAmt,
+          totalAmount: totalAmt,
+          paidAmount: Number(req.body.advancePaid) || 0,
+          dueAmount: Math.max(0, totalAmt - (Number(req.body.advancePaid) || 0)),
+          status: bookingStatus,
+          source: 'WALK_IN',
+          accompanyingGuests: Array.isArray(req.body.accompanyingGuests) ? req.body.accompanyingGuests : [],
+        });
+      }
+
+      for (const r of allocatedRooms) {
+        if (bookingStatus === 'CHECKED_IN') {
+          r.status = 'OCCUPIED';
+          await r.save();
+          emitToHotel(req.hotelId, 'ROOM_UPDATED', {
+            roomId: r._id,
+            roomNumber: r.roomNumber,
+            status: 'OCCUPIED',
+            guestName: guest.fullName,
+          });
+        }
+      }
+    }
+
     emitToHotel(req.hotelId, 'GUEST_UPDATED', { guestId: guest._id, fullName: guest.fullName });
-    res.status(200).json({ success: true, message: 'Guest details saved.', data: guest });
+    emitToHotel(req.hotelId, 'DASHBOARD_SYNC', { type: 'GUEST_SAVED' });
+    res.status(200).json({ success: true, message: 'Guest details saved successfully.', data: guest });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -929,7 +1032,8 @@ export const getGuestsList = async (req: AuthenticatedRequest, res: Response): P
 
     // Fetch all bookings for this hotel to link real-time stay status, room assignment, and visits
     const allBookings = await Booking.find({ hotel: req.hotelId, isDeleted: { $ne: true } })
-      .populate('room', 'roomNumber floor status')
+      .populate('room', 'roomNumber floor status customPricePerNight')
+      .populate('rooms', 'roomNumber floor status customPricePerNight')
       .populate('roomType', 'name')
       .sort({ createdAt: -1 });
 
@@ -956,6 +1060,8 @@ export const getGuestsList = async (req: AuthenticatedRequest, res: Response): P
       let roomNumber = 'Not Assigned';
       let checkInStr = 'N/A';
       let checkOutStr = 'N/A';
+      let roomIds: any[] = [];
+      let roomNumsList: string[] = [];
 
       if (activeBooking) {
         if (activeBooking.status === 'CHECKED_IN') stayStatus = 'IN-HOUSE';
@@ -963,10 +1069,23 @@ export const getGuestsList = async (req: AuthenticatedRequest, res: Response): P
         else if (activeBooking.status === 'CHECKED_OUT') stayStatus = 'CHECKED_OUT';
         else if (activeBooking.status === 'CANCELLED') stayStatus = 'CANCELLED';
 
-        const r = activeBooking.room as any;
-        if (r?.roomNumber) {
-          roomNumber = String(r.roomNumber);
+        const rList = Array.isArray(activeBooking.rooms) && activeBooking.rooms.length > 0
+          ? activeBooking.rooms
+          : activeBooking.room ? [activeBooking.room] : [];
+        
+        roomIds = rList.map((rm: any) => rm._id || rm);
+        roomNumsList = rList.map((rm: any) => String(rm.roomNumber || '')).filter(Boolean);
+
+        if (roomNumsList.length > 0) {
+          roomNumber = roomNumsList.join(', ');
+        } else if (activeBooking.roomNumbers && activeBooking.roomNumbers.length > 0) {
+          roomNumber = activeBooking.roomNumbers.join(', ');
+          roomNumsList = activeBooking.roomNumbers;
+        } else if (activeBooking.roomNumber) {
+          roomNumber = String(activeBooking.roomNumber);
+          roomNumsList = [roomNumber];
         }
+
         if (activeBooking.checkInDate) {
           checkInStr = new Date(activeBooking.checkInDate).toLocaleDateString('en-IN');
         }
@@ -982,12 +1101,18 @@ export const getGuestsList = async (req: AuthenticatedRequest, res: Response): P
         status: stayStatus,
         roomAssigned: roomNumber,
         roomNumber: roomNumber,
+        roomNumbers: roomNumsList,
+        roomIds,
         checkInDate: checkInStr,
         checkOutDate: checkOutStr,
+        checkInDateRaw: activeBooking?.checkInDate || null,
+        checkOutDateRaw: activeBooking?.checkOutDate || null,
         totalVisits: guestBookings.length || 1,
         activeBookingNumber: activeBooking?.bookingNumber || 'N/A',
         dueAmount: activeBooking?.dueAmount || 0,
         totalAmount: activeBooking?.totalAmount || 0,
+        paidAmount: activeBooking?.paidAmount || 0,
+        accompanyingGuests: activeBooking?.accompanyingGuests || [],
         idType: gObj.idProof?.idType || 'AADHAAR',
         idNumber: gObj.idProof?.idNumber || 'N/A',
         govtIdType: gObj.idProof?.idType || 'AADHAAR',

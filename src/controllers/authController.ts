@@ -8,11 +8,21 @@ import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import sendEmail from '../utils/sendEmail';
 import { passwordResetOtpTemplate } from '../utils/emailTemplates';
 
-// JWT Token Generator
-const generateToken = (id: string, role: string): string => {
+// Access Token Generator (Short-lived: 1 Hour)
+export const generateAccessToken = (id: string, role: string): string => {
   const secret = process.env.JWT_SECRET || 'super_hotel_jwt_secret_key_2026_modern_secure';
-  return jwt.sign({ id, role }, secret, {
-    expiresIn: '7d',
+  return jwt.sign({ id, role, tokenType: 'ACCESS' }, secret, {
+    expiresIn: '1h',
+  });
+};
+
+// Refresh Token Generator (Long-lived: 30 Days)
+export const generateRefreshToken = (id: string): string => {
+  const refreshSecret =
+    process.env.JWT_REFRESH_SECRET ||
+    (process.env.JWT_SECRET || 'super_hotel_jwt_secret_key_2026_modern_secure') + '_refresh';
+  return jwt.sign({ id, tokenType: 'REFRESH' }, refreshSecret, {
+    expiresIn: '30d',
   });
 };
 
@@ -77,20 +87,29 @@ export const computeSubscriptionMetrics = (hotel: any) => {
   };
 };
 
-// Set Token in Cookie and return user + hotel data
+// Set Access & Refresh Tokens in Cookies and return complete auth payload
 const sendTokenResponse = async (
   user: any,
   statusCode: number,
   res: Response,
   message: string
 ): Promise<void> => {
-  const token = generateToken(user._id.toString(), user.role);
+  const accessToken = generateAccessToken(user._id.toString(), user.role);
+  const refreshToken = generateRefreshToken(user._id.toString());
 
-  const cookieOptions = {
-    expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 Days
+  const isProd = process.env.NODE_ENV === 'production';
+  const accessCookieOptions = {
+    expires: new Date(Date.now() + 60 * 60 * 1000), // 1 Hour
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
+    secure: isProd,
+    sameSite: (isProd ? 'none' : 'lax') as any,
+  };
+
+  const refreshCookieOptions = {
+    expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 Days
+    httpOnly: true,
+    secure: isProd,
+    sameSite: (isProd ? 'none' : 'lax') as any,
   };
 
   let hotelDetails: any = null;
@@ -104,11 +123,14 @@ const sendTokenResponse = async (
 
   res
     .status(statusCode)
-    .cookie('token', token, cookieOptions)
+    .cookie('token', accessToken, accessCookieOptions)
+    .cookie('refreshToken', refreshToken, refreshCookieOptions)
     .json({
       success: true,
       message,
-      token,
+      token: accessToken,
+      accessToken,
+      refreshToken,
       data: {
         _id: user._id,
         name: user.name,
@@ -133,6 +155,81 @@ const sendTokenResponse = async (
           : undefined,
       },
     });
+};
+
+// @desc    Refresh Access Token using Long-Lived Refresh Token
+// @route   POST /api/v1/auth/refresh-token
+export const refreshTokenHandler = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const refreshToken = req.body?.refreshToken || req.cookies?.refreshToken;
+
+    if (!refreshToken) {
+      res.status(401).json({
+        success: false,
+        message: 'Refresh token missing. Please login again.',
+      });
+      return;
+    }
+
+    const refreshSecret =
+      process.env.JWT_REFRESH_SECRET ||
+      (process.env.JWT_SECRET || 'super_hotel_jwt_secret_key_2026_modern_secure') + '_refresh';
+
+    let decoded: any;
+    try {
+      decoded = jwt.verify(refreshToken, refreshSecret);
+    } catch (err) {
+      res.status(401).json({
+        success: false,
+        message: 'Invalid or expired refresh token. Please login again.',
+      });
+      return;
+    }
+
+    const user = await User.findById(decoded.id);
+
+    if (!user) {
+      res.status(401).json({ success: false, message: 'User account not found.' });
+      return;
+    }
+
+    if (user.status === 'INACTIVE' || user.status === 'BLOCKED' || user.status === 'DELETED' || user.isDeleted) {
+      res.status(403).json({ success: false, message: 'Account is deactivated or disabled.' });
+      return;
+    }
+
+    const newAccessToken = generateAccessToken(user._id.toString(), user.role);
+    const newRefreshToken = generateRefreshToken(user._id.toString());
+
+    const isProd = process.env.NODE_ENV === 'production';
+    const accessCookieOptions = {
+      expires: new Date(Date.now() + 60 * 60 * 1000), // 1 Hour
+      httpOnly: true,
+      secure: isProd,
+      sameSite: (isProd ? 'none' : 'lax') as any,
+    };
+
+    const refreshCookieOptions = {
+      expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 Days
+      httpOnly: true,
+      secure: isProd,
+      sameSite: (isProd ? 'none' : 'lax') as any,
+    };
+
+    res
+      .status(200)
+      .cookie('token', newAccessToken, accessCookieOptions)
+      .cookie('refreshToken', newRefreshToken, refreshCookieOptions)
+      .json({
+        success: true,
+        message: 'Access token refreshed successfully.',
+        token: newAccessToken,
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+      });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 // @desc    Login User (Super Admin, Hotel Admin, Receptionist)
@@ -404,10 +501,15 @@ export const getMe = async (req: AuthenticatedRequest, res: Response): Promise<v
 // @route   POST /api/v1/auth/logout
 export const logoutUser = async (req: Request, res: Response): Promise<void> => {
   try {
-    res.cookie('token', '', {
+    const isProd = process.env.NODE_ENV === 'production';
+    const clearOptions = {
       httpOnly: true,
+      secure: isProd,
+      sameSite: (isProd ? 'none' : 'lax') as any,
       expires: new Date(0),
-    });
+    };
+    res.cookie('token', '', clearOptions);
+    res.cookie('refreshToken', '', clearOptions);
     res.status(200).json({ success: true, message: 'Logged out successfully.' });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });

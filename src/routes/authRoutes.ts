@@ -6,6 +6,7 @@ import {
   forgotPassword,
   resetPasswordWithOtp,
   getMe,
+  refreshTokenHandler,
 } from '../controllers/authController';
 import { authenticateUser } from '../middleware/authMiddleware';
 
@@ -13,6 +14,7 @@ const router: Router = express.Router();
 
 router.post('/login', loginUser);
 router.post('/logout', logoutUser);
+router.post('/refresh-token', refreshTokenHandler);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPasswordWithOtp);
 

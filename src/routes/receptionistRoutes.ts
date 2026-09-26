@@ -16,7 +16,15 @@ import {
   ocrVerifyGovtId,
   directVerifyDrivingLicense,
 } from '../controllers/receptionistController';
-import { getRoomTypes, createRoom, updateRoom, deleteRoom, updateRoomStatus } from '../controllers/hotelAdminController';
+import {
+  getRoomTypes,
+  createRoom,
+  updateRoom,
+  deleteRoom,
+  updateRoomStatus,
+  getDailyCollectionsReconciliation,
+  settleCashDrawerHandover,
+} from '../controllers/hotelAdminController';
 import {
   authenticateUser,
   requireRole,
@@ -60,6 +68,10 @@ router.post('/bookings/:id/check-out', processCheckOut);
 // Payment Collections & Cash Drawer Ledger
 router.get('/payments', getPaymentsLedger);
 router.post('/payments', recordDirectPayment);
+
+// Daily Collections, Shift Settlement & Handover
+router.get('/daily-collections', getDailyCollectionsReconciliation);
+router.post('/daily-collections/handover', settleCashDrawerHandover);
 
 export default router;
 
