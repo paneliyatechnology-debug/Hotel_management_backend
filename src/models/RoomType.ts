@@ -24,10 +24,10 @@ const roomTypeSchema = new Schema<IRoomType>(
     hotel: { type: Schema.Types.ObjectId, ref: 'Hotel', required: true, index: true },
     name: { type: String, required: [true, 'Room type name is required'], trim: true },
     description: { type: String, default: '' },
-    basePrice: { type: Number, required: [true, 'Base price per night is required'], min: 0 },
+    basePrice: { type: Number, default: 0, min: 0 },
     capacity: {
       adults: { type: Number, default: 2, min: 1 },
-      children: { type: Number, default: 1, min: 0 },
+      children: { type: Number, default: 0, min: 0 },
     },
     bedCount: { type: Number, default: 1 },
     bedType: { type: String, default: '1 King Bed' },

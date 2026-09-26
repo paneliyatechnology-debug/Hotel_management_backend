@@ -178,17 +178,17 @@ export const getHotelProfile = async (req: AuthenticatedRequest, res: Response):
 export const createRoomType = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { name, description, basePrice, capacity, bedCount, bedType, amenities, images } = req.body;
-    if (!name || !basePrice) {
-      res.status(400).json({ success: false, message: 'Room type name and base price are required.' });
+    if (!name) {
+      res.status(400).json({ success: false, message: 'Room category name is required.' });
       return;
     }
 
     const roomType = await RoomType.create({
       hotel: req.hotelId,
       name,
-      description,
-      basePrice,
-      capacity: capacity || { adults: 2, children: 1 },
+      description: description || '',
+      basePrice: Number(basePrice) || 0,
+      capacity: capacity || { adults: 2, children: 0 },
       bedCount: Number(bedCount) || 1,
       bedType: bedType || '1 King Bed',
       amenities: amenities || [],
