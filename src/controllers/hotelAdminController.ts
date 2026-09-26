@@ -577,7 +577,14 @@ export const updateReceptionist = async (req: AuthenticatedRequest, res: Respons
 
     if (name) staff.name = name;
     if (phone !== undefined) staff.phone = phone;
-    if (email) staff.email = email.toLowerCase();
+    if (email && email.toLowerCase() !== staff.email) {
+      const existingUser = await User.findOne({ email: email.toLowerCase(), _id: { $ne: staff._id } });
+      if (existingUser) {
+        res.status(400).json({ success: false, message: 'Another user with this email already exists.' });
+        return;
+      }
+      staff.email = email.toLowerCase();
+    }
     if (role) {
       const validRoles = ['RECEPTIONIST', 'MANAGER', 'HOUSEKEEPING', 'ACCOUNTANT'];
       const normalizedRole = role.toString().trim().toUpperCase();
@@ -587,6 +594,15 @@ export const updateReceptionist = async (req: AuthenticatedRequest, res: Respons
     }
 
     await staff.save();
+
+    if (req.user) {
+      await logAuditAction({
+        user: req.user,
+        action: 'STAFF_MEMBER_UPDATED',
+        module: 'STAFF',
+        entityId: staff.email,
+      });
+    }
 
     res.status(200).json({
       success: true,
