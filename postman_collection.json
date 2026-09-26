@@ -7,10 +7,10 @@
   },
   "item": [
     {
-      "name": "1. Authentication & Security",
+      "name": "1. Common Authentication & Profile",
       "item": [
         {
-          "name": "Login (Super Admin / Hotel Admin / Receptionist)",
+          "name": "1.1 Login (Super Admin / Hotel Admin / Receptionist)",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -22,7 +22,7 @@
           }
         },
         {
-          "name": "Refresh Access Token (Using Refresh Token)",
+          "name": "1.2 Refresh Access Token (Using Refresh Token)",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -34,7 +34,7 @@
           }
         },
         {
-          "name": "Get Current Profile (Me)",
+          "name": "1.3 Get Current Profile (Me)",
           "request": {
             "method": "GET",
             "header": [],
@@ -42,7 +42,7 @@
           }
         },
         {
-          "name": "Change Password (First Login / Profile)",
+          "name": "1.4 Change Password (First Login / Profile)",
           "request": {
             "method": "PUT",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -54,7 +54,7 @@
           }
         },
         {
-          "name": "Forgot Password (Send OTP)",
+          "name": "1.5 Forgot Password (Send OTP)",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -66,7 +66,7 @@
           }
         },
         {
-          "name": "Reset Password with OTP",
+          "name": "1.6 Reset Password with OTP",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -78,7 +78,7 @@
           }
         },
         {
-          "name": "Logout",
+          "name": "1.7 Logout",
           "request": {
             "method": "POST",
             "header": [],
