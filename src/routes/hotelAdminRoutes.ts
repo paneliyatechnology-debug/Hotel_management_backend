@@ -12,7 +12,6 @@ import {
   updateRoomStatus,
   getReceptionists,
   createReceptionist,
-  updateReceptionist,
   deleteReceptionist,
   updateReceptionistStatus,
   getHotelProfile,
@@ -55,7 +54,6 @@ router.put('/rooms/:id/status', updateRoomStatus);
 // Staff / Receptionists (Admin only)
 router.get('/receptionists', requireRole('HOTEL_ADMIN'), getReceptionists);
 router.post('/receptionists', requireRole('HOTEL_ADMIN'), createReceptionist);
-router.put('/receptionists/:id', requireRole('HOTEL_ADMIN'), updateReceptionist);
 router.delete('/receptionists/:id', requireRole('HOTEL_ADMIN'), deleteReceptionist);
 router.put('/receptionists/:id/status', requireRole('HOTEL_ADMIN'), updateReceptionistStatus);
 

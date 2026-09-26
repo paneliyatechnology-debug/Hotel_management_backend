@@ -20,7 +20,6 @@ router.post('/reset-password', resetPasswordWithOtp);
 
 // Protected Auth Routes
 router.put('/change-password', authenticateUser, changePassword);
-router.post('/change-password', authenticateUser, changePassword);
 router.get('/me', authenticateUser, getMe);
 
 export default router;

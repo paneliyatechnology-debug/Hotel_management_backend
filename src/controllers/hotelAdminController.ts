@@ -785,7 +785,7 @@ export const deleteRoomType = async (req: AuthenticatedRequest, res: Response): 
 
     // 🔒 Check all active non-deleted rooms belonging to this category
     const activeRooms = await Room.find({ hotel: req.hotelId, roomType: roomType._id, isDeleted: { $ne: true } });
-    
+
     // Check if any room is busy / occupied / cleaning / maintenance / blocked
     const busyRooms = activeRooms.filter((r) => r.status !== 'AVAILABLE');
     if (busyRooms.length > 0) {

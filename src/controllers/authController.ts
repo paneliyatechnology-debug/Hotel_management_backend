@@ -330,11 +330,13 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+// @desc    Change Password (for logged-in user - removes mustChangePassword flag)
+// @route   PUT /api/v1/auth/change-password
 export const changePassword = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { currentPassword, newPassword } = req.body;
-    if (!newPassword) {
-      res.status(400).json({ success: false, message: 'New password is required.' });
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ success: false, message: 'Current password and new password are required.' });
       return;
     }
 
@@ -349,15 +351,9 @@ export const changePassword = async (req: AuthenticatedRequest, res: Response): 
       return;
     }
 
-    // Verify current password if provided, or require it if not a first-time force reset
-    if (currentPassword) {
-      const isMatch = await user.matchPassword(currentPassword);
-      if (!isMatch) {
-        res.status(400).json({ success: false, message: 'Current password is incorrect.' });
-        return;
-      }
-    } else if (!user.mustChangePassword) {
-      res.status(400).json({ success: false, message: 'Current password is required to change password.' });
+    const isMatch = await user.matchPassword(currentPassword);
+    if (!isMatch) {
+      res.status(400).json({ success: false, message: 'Current password is incorrect.' });
       return;
     }
 
