@@ -59,7 +59,16 @@ export const authenticateUser = async (
 
     next();
   } catch (error: any) {
-    res.status(401).json({ success: false, message: 'Invalid or expired session token.' });
+    if (error.name === 'TokenExpiredError') {
+      res.status(401).json({
+        success: false,
+        isExpired: true,
+        errorCode: 'TOKEN_EXPIRED',
+        message: 'Session access token has expired (1 hour limit). Call POST /api/v1/auth/refresh-token with your refreshToken to get a new access token.',
+      });
+      return;
+    }
+    res.status(401).json({ success: false, message: 'Invalid session token. Please login again.' });
   }
 };
 

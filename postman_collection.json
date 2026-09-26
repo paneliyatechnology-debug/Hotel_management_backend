@@ -22,6 +22,18 @@
           }
         },
         {
+          "name": "Refresh Access Token (Using Refresh Token)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/refresh-token", "host": ["{{baseUrl}}"], "path": ["auth", "refresh-token"] }
+          }
+        },
+        {
           "name": "Get Current Profile (Me)",
           "request": {
             "method": "GET",
