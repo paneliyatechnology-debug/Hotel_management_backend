@@ -279,15 +279,18 @@ export const changePassword = async (req: AuthenticatedRequest, res: Response): 
 export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email } = req.body;
-    if (!email) {
-      res.status(400).json({ success: false, message: 'Please provide email.' });
+    if (!email || !email.trim()) {
+      res.status(400).json({ success: false, message: 'Please provide registered email address.' });
       return;
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const cleanEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: cleanEmail });
     if (!user) {
-      // Return success to prevent email enumeration
-      res.status(200).json({ success: true, message: 'If this email exists, an OTP has been sent.' });
+      res.status(404).json({
+        success: false,
+        message: `No account registered with "${cleanEmail}". Please check your email address.`,
+      });
       return;
     }
 
@@ -304,7 +307,7 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
 
     console.log(`\n========================================\n🔑 PASSWORD RESET OTP for ${user.email}: [ ${otp} ]\n========================================\n`);
 
-    // Send OTP email
+    // Send OTP email via Dual-Engine Dispatcher
     try {
       await sendEmail({
         email: user.email,
@@ -317,7 +320,7 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
 
     res.status(200).json({
       success: true,
-      message: 'Password reset OTP has been sent securely to your registered email.',
+      message: `6-digit OTP has been sent securely to ${user.email}. Please check your inbox / spam folder.`,
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
