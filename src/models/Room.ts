@@ -50,7 +50,7 @@ const roomSchema = new Schema<IRoom>(
   }
 );
 
-roomSchema.index({ hotel: 1, roomNumber: 1 }, { unique: true });
+roomSchema.index({ hotel: 1, floor: 1, roomNumber: 1 }, { unique: true });
 
 const Room: Model<IRoom> = mongoose.model<IRoom>('Room', roomSchema);
 

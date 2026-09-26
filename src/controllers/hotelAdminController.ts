@@ -274,16 +274,23 @@ export const createRoom = async (req: AuthenticatedRequest, res: Response): Prom
       return;
     }
 
-    const existingRoom = await Room.findOne({ hotel: req.hotelId, roomNumber: roomNumber.toString().trim() });
+    const targetFloor = Number(floor) || 1;
+    const targetRoomNumber = roomNumber.toString().trim();
+
+    const existingRoom = await Room.findOne({
+      hotel: req.hotelId,
+      floor: targetFloor,
+      roomNumber: targetRoomNumber,
+    });
     if (existingRoom && !existingRoom.isDeleted) {
-      res.status(400).json({ success: false, message: `Room ${roomNumber} already exists in this hotel.` });
+      res.status(400).json({ success: false, message: `Room ${targetRoomNumber} already exists on Floor ${targetFloor}.` });
       return;
     }
 
     let room;
     if (existingRoom && existingRoom.isDeleted) {
       existingRoom.roomType = roomType;
-      existingRoom.floor = Number(floor) || 1;
+      existingRoom.floor = targetFloor;
       existingRoom.seatingCapacity = Number(seatingCapacity) || 2;
       existingRoom.bedCount = Number(bedCount) || 1;
       existingRoom.bedType = bedType || '1 King Bed';
@@ -298,9 +305,9 @@ export const createRoom = async (req: AuthenticatedRequest, res: Response): Prom
     } else {
       room = await Room.create({
         hotel: req.hotelId,
-        roomNumber: roomNumber.toString().trim(),
+        roomNumber: targetRoomNumber,
         roomType,
-        floor: Number(floor) || 1,
+        floor: targetFloor,
         seatingCapacity: Number(seatingCapacity) || 2,
         bedCount: Number(bedCount) || 1,
         bedType: bedType || '1 King Bed',
@@ -320,14 +327,14 @@ export const createRoom = async (req: AuthenticatedRequest, res: Response): Prom
         user: req.user,
         action: 'ROOM_CREATED',
         module: 'ROOMS',
-        entityId: room.roomNumber,
+        entityId: `${room.roomNumber} (Floor ${room.floor})`,
       });
     }
 
     emitToHotel(req.hotelId, 'ROOM_UPDATED', { roomId: room._id, roomNumber: room.roomNumber, status: room.status });
     emitToHotel(req.hotelId, 'DASHBOARD_SYNC', { type: 'ROOM_CREATED' });
 
-    res.status(201).json({ success: true, message: `Room ${room.roomNumber} created successfully.`, data: populatedRoom || room });
+    res.status(201).json({ success: true, message: `Room ${room.roomNumber} on Floor ${room.floor} created successfully.`, data: populatedRoom || room });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -342,13 +349,23 @@ export const updateRoom = async (req: AuthenticatedRequest, res: Response): Prom
       return;
     }
 
-    if (roomNumber && roomNumber.toString().trim() !== room.roomNumber) {
-      const duplicate = await Room.findOne({ hotel: req.hotelId, roomNumber: roomNumber.toString().trim(), _id: { $ne: room._id }, isDeleted: { $ne: true } });
+    const targetFloor = floor !== undefined ? Number(floor) : room.floor;
+    const targetRoomNumber = roomNumber ? roomNumber.toString().trim() : room.roomNumber;
+
+    if (targetRoomNumber !== room.roomNumber || targetFloor !== room.floor) {
+      const duplicate = await Room.findOne({
+        hotel: req.hotelId,
+        floor: targetFloor,
+        roomNumber: targetRoomNumber,
+        _id: { $ne: room._id },
+        isDeleted: { $ne: true },
+      });
       if (duplicate) {
-        res.status(400).json({ success: false, message: `Room number ${roomNumber} is already in use.` });
+        res.status(400).json({ success: false, message: `Room number ${targetRoomNumber} already exists on Floor ${targetFloor}.` });
         return;
       }
-      room.roomNumber = roomNumber.toString().trim();
+      room.roomNumber = targetRoomNumber;
+      room.floor = targetFloor;
     }
 
     if (roomType) room.roomType = roomType;
