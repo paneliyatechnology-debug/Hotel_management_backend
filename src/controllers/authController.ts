@@ -128,7 +128,6 @@ const sendTokenResponse = async (
     .json({
       success: true,
       message,
-      token: accessToken,
       accessToken,
       refreshToken,
       data: {
@@ -223,7 +222,6 @@ export const refreshTokenHandler = async (req: Request, res: Response): Promise<
       .json({
         success: true,
         message: 'Access token refreshed successfully.',
-        token: newAccessToken,
         accessToken: newAccessToken,
         refreshToken: newRefreshToken,
       });
