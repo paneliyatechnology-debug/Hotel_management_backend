@@ -28,6 +28,9 @@ export interface IBooking extends Document {
     age?: number;
     gender?: 'Male' | 'Female' | 'Other';
     relationship?: string;
+    email?: string;
+    mobileNumber?: string;
+    phone?: string;
     idType?: string;
     idNumber?: string;
     frontImage?: string;
@@ -79,6 +82,9 @@ const bookingSchema = new Schema<IBooking>(
         age: { type: Number },
         gender: { type: String, enum: ['Male', 'Female', 'Other'], default: 'Male' },
         relationship: { type: String, default: 'Family' },
+        email: { type: String, default: '' },
+        mobileNumber: { type: String, default: '' },
+        phone: { type: String, default: '' },
         idType: { type: String, default: 'AADHAAR' },
         idNumber: { type: String, default: '' },
         frontImage: { type: String, default: '' },
