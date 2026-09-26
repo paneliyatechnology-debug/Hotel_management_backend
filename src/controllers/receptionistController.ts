@@ -134,8 +134,24 @@ export const getAvailableRooms = async (req: AuthenticatedRequest, res: Response
     const guestMap: { [key: string]: string } = {};
     activeBookings.forEach((b) => {
       const g = b.guest as any;
-      if (g && b.room) {
-        guestMap[b.room.toString()] = g.fullName;
+      const guestFullName = g?.fullName || g?.name || '';
+      if (guestFullName) {
+        if (b.room) {
+          guestMap[b.room.toString()] = guestFullName;
+        }
+        if (Array.isArray(b.rooms)) {
+          b.rooms.forEach((rId: any) => {
+            if (rId) guestMap[rId.toString()] = guestFullName;
+          });
+        }
+        if (b.roomNumber) {
+          guestMap[`num_${b.roomNumber}`] = guestFullName;
+        }
+        if (Array.isArray(b.roomNumbers)) {
+          b.roomNumbers.forEach((rNum: any) => {
+            if (rNum) guestMap[`num_${rNum}`] = guestFullName;
+          });
+        }
       }
     });
 
@@ -143,7 +159,7 @@ export const getAvailableRooms = async (req: AuthenticatedRequest, res: Response
       const rObj = r.toObject();
       return {
         ...rObj,
-        guestName: guestMap[r._id.toString()] || '',
+        guestName: guestMap[r._id.toString()] || guestMap[`num_${r.roomNumber}`] || '',
       };
     });
 
@@ -751,7 +767,7 @@ export const addBookingCharge = async (req: AuthenticatedRequest, res: Response)
 // @route   POST /api/v1/receptionist/bookings/:id/check-out
 export const processCheckOut = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { settlementPaymentAmount = 0, paymentMethod = 'CASH' } = req.body;
+    const { settlementPaymentAmount = 0, lateCheckoutFee = 0, paymentMethod = 'CASH' } = req.body;
 
     const booking = await Booking.findOne({ _id: req.params.id, hotel: req.hotelId })
       .populate('guest')
@@ -765,6 +781,12 @@ export const processCheckOut = async (req: AuthenticatedRequest, res: Response):
     if (booking.status === 'CHECKED_OUT') {
       res.status(400).json({ success: false, message: 'Booking has already been checked out.' });
       return;
+    }
+
+    const lateFee = Number(lateCheckoutFee) || 0;
+    if (lateFee > 0) {
+      booking.extraChargesTotal = (booking.extraChargesTotal || 0) + lateFee;
+      booking.totalAmount += lateFee;
     }
 
     const paidNow = Number(settlementPaymentAmount) || 0;
