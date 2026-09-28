@@ -14,6 +14,7 @@ import superAdminRoutes from './routes/superAdminRoutes';
 import hotelAdminRoutes from './routes/hotelAdminRoutes';
 import receptionistRoutes from './routes/receptionistRoutes';
 import subscriptionPlanRoutes from './routes/subscriptionPlanRoutes';
+import signatureSyncRoutes from './routes/signatureSyncRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -51,6 +52,8 @@ app.use(cookieParser());
 // Mount API Endpoints
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/v1/signature-sync', signatureSyncRoutes);
+app.use('/api/signature-sync', signatureSyncRoutes);
 app.use('/api/v1/hotels', hotelRoutes);
 app.use('/api/hotels', hotelRoutes);
 app.use('/api/v1/subscription-plans', subscriptionPlanRoutes);
