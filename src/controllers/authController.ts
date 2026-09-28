@@ -445,7 +445,52 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
 };
 
 
-// @desc    Reset Password with OTP
+// @desc    Verify OTP for Password Reset (Step 2)
+// @route   POST /api/v1/auth/verify-otp
+export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !email.trim() || !otp || !otp.trim()) {
+      res.status(400).json({ success: false, message: 'Registered email and 6-digit OTP are required.' });
+      return;
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: cleanEmail });
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        message: `This email "${cleanEmail}" is not registered in our system.`,
+      });
+      return;
+    }
+
+    const resetRecord = await PasswordResetToken.findOne({
+      user: user._id,
+      otp: otp.trim(),
+      used: false,
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!resetRecord) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid or expired OTP. Please check the code or request a new OTP.',
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'OTP verified successfully! Please enter your new password.',
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
+// @desc    Reset Password with OTP (Step 3)
 // @route   POST /api/v1/auth/reset-password
 export const resetPasswordWithOtp = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -455,35 +500,45 @@ export const resetPasswordWithOtp = async (req: Request, res: Response): Promise
       return;
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const cleanEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: cleanEmail });
     if (!user) {
-      res.status(400).json({ success: false, message: 'Invalid or expired OTP.' });
+      res.status(404).json({ success: false, message: `This email "${cleanEmail}" is not registered in our system.` });
       return;
     }
 
     const resetRecord = await PasswordResetToken.findOne({
       user: user._id,
-      otp,
+      otp: otp.trim(),
       used: false,
       expiresAt: { $gt: new Date() },
     });
 
     if (!resetRecord) {
-      res.status(400).json({ success: false, message: 'Invalid or expired OTP.' });
+      res.status(400).json({ success: false, message: 'Invalid or expired OTP. Please request a new OTP.' });
       return;
     }
 
+    if (newPassword.length < 6) {
+      res.status(400).json({ success: false, message: 'New password must be at least 6 characters long.' });
+      return;
+    }
+
+    // Set new password & clear failed login attempts and locks immediately
     user.password = newPassword;
     user.mustChangePassword = false;
+    user.failedLoginAttempts = 0;
+    user.accountLockedUntil = undefined;
     user.passwordChangedAt = new Date();
     await user.save();
 
+    // Mark reset token as used
     resetRecord.used = true;
     await resetRecord.save();
 
     res.status(200).json({
       success: true,
-      message: 'Password has been reset successfully. You can now login.',
+      message: 'Password reset successfully! You can now log in with your new password.',
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });

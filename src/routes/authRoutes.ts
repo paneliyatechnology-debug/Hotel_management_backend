@@ -4,6 +4,7 @@ import {
   logoutUser,
   changePassword,
   forgotPassword,
+  verifyOtp,
   resetPasswordWithOtp,
   getMe,
   refreshTokenHandler,
@@ -17,6 +18,7 @@ router.post('/logout', logoutUser);
 router.post('/refresh-token', refreshTokenHandler);
 router.post('/refresh', refreshTokenHandler);
 router.post('/forgot-password', forgotPassword);
+router.post('/verify-otp', verifyOtp);
 router.post('/reset-password', resetPasswordWithOtp);
 
 // Protected Auth Routes
