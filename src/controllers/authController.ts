@@ -248,28 +248,37 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Check if account locked
-    if (user.accountLockedUntil && user.accountLockedUntil > new Date()) {
-      res.status(403).json({
+    // Verify password first
+    const isMatch = await user.matchPassword(password);
+    if (!isMatch) {
+      // If password does not match, check if account is locked
+      if (user.accountLockedUntil && user.accountLockedUntil > new Date()) {
+        const remainingMinutes = Math.ceil((user.accountLockedUntil.getTime() - Date.now()) / (60 * 1000));
+        res.status(403).json({
+          success: false,
+          message: `Account temporarily locked due to multiple failed login attempts. Try again in ${remainingMinutes} minute(s) or use Forgot Password to reset.`,
+        });
+        return;
+      }
+
+      user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+      if (user.failedLoginAttempts >= 5) {
+        user.accountLockedUntil = new Date(Date.now() + 5 * 60 * 1000); // 5 mins lockout
+      }
+      await user.save();
+      const attemptsLeft = Math.max(0, 5 - user.failedLoginAttempts);
+      res.status(401).json({
         success: false,
-        message: 'Account temporarily locked due to multiple failed attempts. Try again later.',
+        message: attemptsLeft > 0
+          ? `Invalid email or password. (${attemptsLeft} attempt(s) remaining)`
+          : 'Account temporarily locked due to 5 failed attempts. Please reset your password or wait 5 minutes.',
       });
       return;
     }
 
-    const isMatch = await user.matchPassword(password);
-    if (!isMatch) {
-      user.failedLoginAttempts += 1;
-      if (user.failedLoginAttempts >= 5) {
-        user.accountLockedUntil = new Date(Date.now() + 15 * 60 * 1000); // Lock for 15 mins
-      }
-      await user.save();
-      res.status(401).json({ success: false, message: 'Invalid email or password.' });
-      return;
-    }
-
-    // Reset failed attempts & record login time
+    // On correct password match, automatically clear any lock & reset failed attempts!
     user.failedLoginAttempts = 0;
+    user.accountLockedUntil = undefined;
     user.lastLoginAt = new Date();
     await user.save();
 
