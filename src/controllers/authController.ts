@@ -373,16 +373,37 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
   try {
     const { email } = req.body;
     if (!email || !email.trim()) {
-      res.status(400).json({ success: false, message: 'Please provide registered email address.' });
+      res.status(400).json({ success: false, message: 'Please enter your registered email address.' });
       return;
     }
 
     const cleanEmail = email.toLowerCase().trim();
+
+    // Strict Email Format Validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      res.status(400).json({
+        success: false,
+        message: 'Please enter a valid email address format (e.g. name@example.com).',
+      });
+      return;
+    }
+
+    // Check if user is registered in the database
     const user = await User.findOne({ email: cleanEmail });
     if (!user) {
       res.status(404).json({
         success: false,
-        message: `No account registered with "${cleanEmail}". Please check your email address.`,
+        message: `This email "${cleanEmail}" is not registered in our system. Please check your email or contact your administrator.`,
+      });
+      return;
+    }
+
+    // Check if user account is active
+    if (user.isActive === false) {
+      res.status(403).json({
+        success: false,
+        message: 'This account has been deactivated. Please contact your hotel administrator.',
       });
       return;
     }
@@ -390,6 +411,9 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
     // Generate 6-digit OTP & Reset Token
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const token = crypto.randomBytes(20).toString('hex');
+
+    // Invalidate any previous pending tokens for this user
+    await PasswordResetToken.deleteMany({ user: user._id });
 
     await PasswordResetToken.create({
       user: user._id,
