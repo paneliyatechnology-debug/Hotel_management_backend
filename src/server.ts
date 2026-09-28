@@ -50,11 +50,17 @@ app.use(cookieParser());
 
 // Mount API Endpoints
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/v1/hotels', hotelRoutes);
+app.use('/api/hotels', hotelRoutes);
 app.use('/api/v1/subscription-plans', subscriptionPlanRoutes);
+app.use('/api/subscription-plans', subscriptionPlanRoutes);
 app.use('/api/v1/super-admin', superAdminRoutes);
+app.use('/api/super-admin', superAdminRoutes);
 app.use('/api/v1/admin', hotelAdminRoutes);
+app.use('/api/admin', hotelAdminRoutes);
 app.use('/api/v1/receptionist', receptionistRoutes);
+app.use('/api/receptionist', receptionistRoutes);
 
 // Health Check & Documentation Overview
 app.get('/', (req: Request, res: Response) => {
