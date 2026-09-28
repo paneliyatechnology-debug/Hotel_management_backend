@@ -1809,4 +1809,82 @@ export const directVerifyDrivingLicense = async (req: AuthenticatedRequest, res:
   }
 };
 
+/**
+ * Save / Update Guest Digital Signature
+ * POST /api/v1/receptionist/guests/:id/signature
+ */
+export const saveGuestSignature = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { signature } = req.body;
+
+    if (!signature) {
+      res.status(400).json({ success: false, message: 'Signature data is required' });
+      return;
+    }
+
+    const guest = await Guest.findOne({ _id: id, hotel: req.hotelId, isDeleted: false });
+    if (!guest) {
+      res.status(404).json({ success: false, message: 'Guest record not found' });
+      return;
+    }
+
+    guest.signature = signature;
+    guest.signatureDate = new Date();
+    await guest.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Guest signature saved successfully',
+      data: {
+        guestId: guest._id,
+        signature: guest.signature,
+        signatureDate: guest.signatureDate,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Save / Update Booking Guest Digital Signature
+ * POST /api/v1/receptionist/bookings/:id/signature
+ */
+export const saveBookingSignature = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { signature } = req.body;
+
+    if (!signature) {
+      res.status(400).json({ success: false, message: 'Signature data is required' });
+      return;
+    }
+
+    const booking = await Booking.findOne({ _id: id, hotel: req.hotelId });
+    if (!booking) {
+      res.status(404).json({ success: false, message: 'Booking record not found' });
+      return;
+    }
+
+    booking.guestSignature = signature;
+    booking.guestSignedAt = new Date();
+    await booking.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Booking guest signature saved successfully',
+      data: {
+        bookingId: booking._id,
+        bookingNumber: booking.bookingNumber,
+        guestSignature: booking.guestSignature,
+        guestSignedAt: booking.guestSignedAt,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
 

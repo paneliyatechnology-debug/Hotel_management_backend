@@ -57,6 +57,24 @@ export const initSocket = (httpServer: HttpServer): Server => {
       }
     });
 
+    // 4. Real-time Digital Signature Sync Rooms (Zero-polling)
+    socket.on('join_signature_session', (data: { sessionId?: string }) => {
+      if (data?.sessionId) {
+        const room = `sig_${data.sessionId}`;
+        socket.join(room);
+        console.log(`✍️ [Socket.io] Socket ${socket.id} joined signature session: ${room}`);
+      }
+    });
+
+    socket.on('submit_signature', (data: { sessionId: string; signature: string; guestName?: string }) => {
+      if (data?.sessionId && data?.signature) {
+        const room = `sig_${data.sessionId}`;
+        console.log(`⚡ [Socket.io] Signature submitted for session: ${data.sessionId}`);
+        io?.to(room).emit('SIGNATURE_SUBMITTED', data);
+        io?.emit('SIGNATURE_SUBMITTED', data); // Broadcast to any active admin listener
+      }
+    });
+
     socket.on('disconnect', (reason) => {
       console.log(`❌ [Socket.io] Client disconnected: ${socket.id} (Reason: ${reason})`);
     });

@@ -28,6 +28,8 @@ export interface IGuest extends Document {
   };
   totalVisits: number;
   totalSpent: number;
+  signature?: string;
+  signatureDate?: Date;
   isDeleted: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -66,6 +68,8 @@ const guestSchema = new Schema<IGuest>(
       verifiedAt: { type: Date },
       verificationNotes: { type: String, default: '' },
     },
+    signature: { type: String, default: '' },
+    signatureDate: { type: Date },
     totalVisits: { type: Number, default: 1 },
     totalSpent: { type: Number, default: 0 },
     isDeleted: { type: Boolean, default: false, index: true },

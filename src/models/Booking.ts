@@ -48,6 +48,8 @@ export interface IBooking extends Document {
   dueAmount: number;
 
   status: BookingStatus;
+  guestSignature?: string;
+  guestSignedAt?: Date;
   specialRequests?: string;
   notes?: string;
   createdAt: Date;
@@ -105,6 +107,8 @@ const bookingSchema = new Schema<IBooking>(
       default: 'CONFIRMED',
       index: true,
     },
+    guestSignature: { type: String, default: '' },
+    guestSignedAt: { type: Date },
     specialRequests: { type: String, default: '' },
     notes: { type: String, default: '' },
   },

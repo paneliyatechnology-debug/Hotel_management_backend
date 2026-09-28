@@ -15,6 +15,8 @@ import {
   recordDirectPayment,
   ocrVerifyGovtId,
   directVerifyDrivingLicense,
+  saveGuestSignature,
+  saveBookingSignature,
 } from '../controllers/receptionistController';
 import {
   getRoomTypes,
@@ -54,6 +56,7 @@ router.get('/guests', getGuestsList);
 router.post('/guests', registerGuest);
 router.delete('/guests/:id', deleteGuest);
 router.put('/guests/:id/verify-id', verifyGuestId);
+router.post('/guests/:id/signature', saveGuestSignature);
 
 // Surepass Zero-OTP KYC OCR & Automated Verification
 router.post('/kyc/ocr-verify', ocrVerifyGovtId);
@@ -64,6 +67,7 @@ router.get('/bookings', getBookingsList);
 router.post('/bookings', createBookingOrCheckIn);
 router.post('/bookings/:id/charges', addBookingCharge);
 router.post('/bookings/:id/check-out', processCheckOut);
+router.post('/bookings/:id/signature', saveBookingSignature);
 
 // Payment Collections & Cash Drawer Ledger
 router.get('/payments', getPaymentsLedger);
