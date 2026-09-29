@@ -15,6 +15,7 @@ import hotelAdminRoutes from './routes/hotelAdminRoutes';
 import receptionistRoutes from './routes/receptionistRoutes';
 import subscriptionPlanRoutes from './routes/subscriptionPlanRoutes';
 import signatureSyncRoutes from './routes/signatureSyncRoutes';
+import settingsRoutes from './routes/settingsRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -64,6 +65,8 @@ app.use('/api/v1/admin', hotelAdminRoutes);
 app.use('/api/admin', hotelAdminRoutes);
 app.use('/api/v1/receptionist', receptionistRoutes);
 app.use('/api/receptionist', receptionistRoutes);
+app.use('/api/v1/settings', settingsRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Health Check & Documentation Overview
 app.get('/', (req: Request, res: Response) => {

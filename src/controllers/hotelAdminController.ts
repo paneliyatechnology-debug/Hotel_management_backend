@@ -16,6 +16,7 @@ import logAuditAction from '../utils/auditLogger';
 import { receptionistCredentialsEmailTemplate } from '../utils/emailTemplates';
 import { computeSubscriptionMetrics } from './authController';
 import { emitToHotel } from '../utils/socketService';
+import { checkEmailExistsGlobally } from '../utils/emailValidator';
 
 // @desc    Hotel Admin Dashboard KPI Summary
 // @route   GET /api/v1/admin/dashboard
@@ -500,9 +501,9 @@ export const createReceptionist = async (req: AuthenticatedRequest, res: Respons
       return;
     }
 
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
-    if (existingUser) {
-      res.status(400).json({ success: false, message: 'A user with this email already exists.' });
+    const isEmailUsed = await checkEmailExistsGlobally(email);
+    if (isEmailUsed) {
+      res.status(400).json({ success: false, message: 'This email is already registered in the system (either as a user, guest, or another hotel owner).' });
       return;
     }
 
@@ -595,9 +596,9 @@ export const updateReceptionist = async (req: AuthenticatedRequest, res: Respons
     if (name) staff.name = name;
     if (phone !== undefined) staff.phone = phone;
     if (email && email.toLowerCase() !== staff.email) {
-      const existingUser = await User.findOne({ email: email.toLowerCase(), _id: { $ne: staff._id } });
-      if (existingUser) {
-        res.status(400).json({ success: false, message: 'Another user with this email already exists.' });
+      const isEmailUsed = await checkEmailExistsGlobally(email, staff._id.toString(), 'User');
+      if (isEmailUsed) {
+        res.status(400).json({ success: false, message: 'This email is already registered in the system (either as a user, guest, or another hotel owner).' });
         return;
       }
       staff.email = email.toLowerCase();

@@ -2,8 +2,10 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import Hotel from '../models/Hotel';
 import User from '../models/User';
+import SystemSettings from '../models/SystemSettings';
 import sendEmail from '../utils/sendEmail';
 import { hotelApprovedEmailTemplate } from '../utils/emailTemplates';
+import { checkEmailExistsGlobally } from '../utils/emailValidator';
 
 // @desc    Register a new Hotel & Immediately activate 30-Day Free Trial + send credentials
 // @route   POST /api/v1/hotels/register
@@ -37,20 +39,30 @@ export const registerHotel = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    // Check if owner email or hotel already exists
-    const existingHotel = await Hotel.findOne({ ownerEmail: ownerEmail.toLowerCase() });
-    if (existingHotel) {
+    // Check if owner email or hotel already exists globally
+    const isEmailUsed = await checkEmailExistsGlobally(ownerEmail);
+    if (isEmailUsed) {
       res.status(400).json({
         success: false,
-        message: 'A hotel is already registered with this owner email address.',
+        message: 'This email is already registered in the system (either as a user, guest, or another hotel owner). Please use a different email.',
       });
       return;
     }
 
     const trialStart = new Date();
-    const trialEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 Days Free Trial
+    let settings = await SystemSettings.findOne();
+    if (!settings) {
+      settings = await SystemSettings.create({ freeTrialValue: 30, freeTrialUnit: 'days' });
+    }
 
-    // Create the Hotel with ACTIVE status & 30-Day trial
+    let trialEnd = new Date(trialStart);
+    if (settings.freeTrialUnit === 'hours') {
+      trialEnd.setHours(trialEnd.getHours() + settings.freeTrialValue);
+    } else {
+      trialEnd.setDate(trialEnd.getDate() + settings.freeTrialValue);
+    }
+
+    // Create the Hotel with ACTIVE status & dynamic trial
     const hotel = await Hotel.create({
       name,
       ownerName,

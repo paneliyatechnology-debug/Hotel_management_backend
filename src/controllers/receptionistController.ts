@@ -13,6 +13,7 @@ import { paymentReceiptTemplate, guestBookingConfirmationTemplate } from '../uti
 import { extractAndVerifyAadhaarOCR, extractAndVerifyDrivingLicense } from '../utils/surepassService';
 import { emitToHotel } from '../utils/socketService';
 import { uploadToCloudinary } from '../utils/cloudinary';
+import { checkEmailExistsGlobally } from '../utils/emailValidator';
 
 // @desc    Helper to auto-resolve rooms whose 15-minute cleaning timer expired
 export const resolveCleaningRooms = async (hotelId: any): Promise<void> => {
@@ -230,6 +231,14 @@ export const registerGuest = async (req: AuthenticatedRequest, res: Response): P
     }
 
     let guest = await Guest.findOne({ hotel: req.hotelId, mobileNumber: guestMobile });
+
+    if (email) {
+      const isEmailUsed = await checkEmailExistsGlobally(email, guest ? guest._id.toString() : undefined, 'Guest');
+      if (isEmailUsed) {
+        res.status(400).json({ success: false, message: 'This email is already registered in the system (either as a user, guest, or another hotel owner).' });
+        return;
+      }
+    }
 
     if (guest) {
       // Update existing guest details and reactivate if soft-deleted
@@ -508,6 +517,25 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
       guest = await Guest.findOne({ _id: guestId, hotel: req.hotelId });
     } else if (guestPhone) {
       guest = await Guest.findOne({ hotel: req.hotelId, mobileNumber: guestPhone });
+    }
+
+    if (guestEmail) {
+      const isEmailUsed = await checkEmailExistsGlobally(guestEmail, guest ? guest._id.toString() : undefined, 'Guest');
+      if (isEmailUsed) {
+        res.status(400).json({ success: false, message: 'The primary guest email is already registered in the system.' });
+        return;
+      }
+    }
+
+    // Validate additional members' emails
+    for (const m of filteredMembers) {
+      if (m.email) {
+        const isAgEmailUsed = await checkEmailExistsGlobally(m.email);
+        if (isAgEmailUsed) {
+          res.status(400).json({ success: false, message: `The email ${m.email} for member ${m.name} is already registered in the system.` });
+          return;
+        }
+      }
     }
 
     if (guest) {
