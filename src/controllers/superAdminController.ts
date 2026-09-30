@@ -431,12 +431,28 @@ export const updateHotelDetails = async (req: AuthenticatedRequest, res: Respons
     if (subscriptionStatus) {
       hotel.subscription.status = subscriptionStatus;
     }
+
+    const { customTrialDays } = req.body;
+
     if (trialEndDate) {
-      hotel.subscription.trialEndDate = new Date(trialEndDate);
+      const parsedDate = new Date(trialEndDate);
+      if (!isNaN(parsedDate.getTime())) {
+        hotel.subscription.trialEndDate = parsedDate;
+      }
+    } else if (customTrialDays !== undefined && customTrialDays !== null && Number(customTrialDays) > 0) {
+      // Set trial for exactly N custom days from now
+      hotel.subscription.trialEndDate = new Date(Date.now() + Number(customTrialDays) * 24 * 60 * 60 * 1000);
+      hotel.subscription.status = 'TRIAL';
     } else if (extendTrialDays && Number(extendTrialDays) > 0) {
       const currentEnd = hotel.subscription.trialEndDate ? new Date(hotel.subscription.trialEndDate) : new Date();
       const newEnd = new Date(Math.max(currentEnd.getTime(), Date.now()) + Number(extendTrialDays) * 24 * 60 * 60 * 1000);
       hotel.subscription.trialEndDate = newEnd;
+      hotel.subscription.status = 'TRIAL';
+    }
+
+    // If trial was extended/updated and date is in the future, reactivate hotel if it was EXPIRED
+    if (hotel.subscription.trialEndDate && new Date(hotel.subscription.trialEndDate) > new Date() && hotel.status === 'EXPIRED') {
+      hotel.status = 'ACTIVE';
     }
 
     await hotel.save();
