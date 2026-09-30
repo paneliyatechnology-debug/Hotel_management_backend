@@ -12,6 +12,11 @@ import {
   getSuperAdminAuditLogs,
 } from '../controllers/superAdminController';
 import {
+  getTrialRequests,
+  approveTrialRequest,
+  rejectTrialRequest,
+} from '../controllers/trialRequestController';
+import {
   getSuperAdminSubscriptionPlans,
   createSubscriptionPlan,
   updateSubscriptionPlan,
@@ -36,6 +41,11 @@ router.put('/hotels/:id/extend-trial', extendTrialOrSubscription);
 router.put('/hotels/:id/reset-admin-password', resetHotelAdminPassword);
 router.get('/audit-logs', getSuperAdminAuditLogs);
 
+// Trial Extension Requests Management
+router.get('/trial-requests', getTrialRequests);
+router.put('/trial-requests/:id/approve', approveTrialRequest);
+router.put('/trial-requests/:id/reject', rejectTrialRequest);
+
 // Subscription Plans Management (Max 3 Monthly + 3 Annual = 6 Plans)
 router.get('/subscription-plans', getSuperAdminSubscriptionPlans);
 router.post('/subscription-plans', createSubscriptionPlan);
@@ -44,4 +54,5 @@ router.delete('/subscription-plans/:id', deleteSubscriptionPlan);
 router.post('/subscription-plans/reset-defaults', resetDefaultSubscriptionPlans);
 
 export default router;
+
 
