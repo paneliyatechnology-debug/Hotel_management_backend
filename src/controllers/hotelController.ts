@@ -38,10 +38,16 @@ export const registerHotel = async (req: Request, res: Response): Promise<void> 
       });
       return;
     }
-    const cleanEmail = ownerEmail.toLowerCase().trim();
 
-    // Check if hotel already exists for this owner email, or create new
-    let hotel = await Hotel.findOne({ ownerEmail: cleanEmail });
+    // Check if owner email or hotel already exists globally
+    const isEmailUsed = await checkEmailExistsGlobally(ownerEmail);
+    if (isEmailUsed) {
+      res.status(400).json({
+        success: false,
+        message: 'This email is already registered in the system (either as a user, guest, or another hotel owner). Please use a different email.',
+      });
+      return;
+    }
 
     const trialStart = new Date();
     let settings = await SystemSettings.findOne();
@@ -50,54 +56,40 @@ export const registerHotel = async (req: Request, res: Response): Promise<void> 
     }
 
     let trialEnd = new Date(trialStart);
-    if (settings?.freeTrialUnit === 'hours') {
+    if (settings.freeTrialUnit === 'hours') {
       trialEnd.setHours(trialEnd.getHours() + settings.freeTrialValue);
     } else {
-      trialEnd.setDate(trialEnd.getDate() + (settings?.freeTrialValue || 30));
+      trialEnd.setDate(trialEnd.getDate() + settings.freeTrialValue);
     }
 
-    if (hotel) {
-      // Update existing hotel
-      hotel.name = name;
-      hotel.ownerName = ownerName;
-      hotel.ownerPhone = ownerPhone;
-      hotel.address = address;
-      hotel.city = city;
-      hotel.state = state;
-      hotel.pincode = pincode;
-      hotel.totalRooms = totalRooms ? Number(totalRooms) : hotel.totalRooms;
-      hotel.status = 'ACTIVE';
-      await hotel.save();
-    } else {
-      // Create new hotel
-      hotel = await Hotel.create({
-        name,
-        ownerName,
-        ownerEmail: cleanEmail,
-        ownerPhone,
-        address,
-        city,
-        state,
-        country: country || 'India',
-        pincode,
-        gstNumber: gstNumber || '',
-        panNumber: panNumber || '',
-        totalRooms: totalRooms ? Number(totalRooms) : 0,
-        hotelType: hotelType || 'Boutique Hotel',
-        website: website || '',
-        logo: logo || '',
-        idProofDocument: idProofDocument || '',
-        businessProofDocument: businessProofDocument || '',
-        status: 'ACTIVE',
-        subscription: {
-          plan: 'TRIAL',
-          status: 'TRIAL',
-          trialStartDate: trialStart,
-          trialEndDate: trialEnd,
-          autoRenew: false,
-        },
-      });
-    }
+    // Create the Hotel with ACTIVE status & dynamic trial
+    const hotel = await Hotel.create({
+      name,
+      ownerName,
+      ownerEmail: ownerEmail.toLowerCase(),
+      ownerPhone,
+      address,
+      city,
+      state,
+      country: country || 'India',
+      pincode,
+      gstNumber: gstNumber || '',
+      panNumber: panNumber || '',
+      totalRooms: totalRooms ? Number(totalRooms) : 0,
+      hotelType: hotelType || 'Boutique Hotel',
+      website: website || '',
+      logo: logo || '',
+      idProofDocument: idProofDocument || '',
+      businessProofDocument: businessProofDocument || '',
+      status: 'ACTIVE',
+      subscription: {
+        plan: 'TRIAL',
+        status: 'TRIAL',
+        trialStartDate: trialStart,
+        trialEndDate: trialEnd,
+        autoRenew: false,
+      },
+    });
 
     // Determine password: use user-provided password or generate a name-related password (e.g. Ramesh@123)
     let finalPassword = req.body.password && req.body.password.trim().length >= 4 ? req.body.password.trim() : '';
@@ -111,11 +103,11 @@ export const registerHotel = async (req: Request, res: Response): Promise<void> 
     }
 
     // Create or update the Hotel Admin user account
-    let adminUser = await User.findOne({ email: cleanEmail });
+    let adminUser = await User.findOne({ email: hotel.ownerEmail.toLowerCase() });
     if (!adminUser) {
       adminUser = await User.create({
         name: hotel.ownerName,
-        email: cleanEmail,
+        email: hotel.ownerEmail.toLowerCase(),
         password: finalPassword,
         phone: hotel.ownerPhone,
         role: 'HOTEL_ADMIN',
@@ -125,7 +117,6 @@ export const registerHotel = async (req: Request, res: Response): Promise<void> 
         failedLoginAttempts: 0,
       });
     } else {
-      adminUser.name = hotel.ownerName;
       adminUser.password = finalPassword;
       adminUser.role = 'HOTEL_ADMIN';
       adminUser.hotel = hotel._id as any;
