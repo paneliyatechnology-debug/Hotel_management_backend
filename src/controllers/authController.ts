@@ -256,22 +256,22 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
         const remainingMinutes = Math.ceil((user.accountLockedUntil.getTime() - Date.now()) / (60 * 1000));
         res.status(403).json({
           success: false,
-          message: `Account temporarily locked due to multiple failed login attempts. Try again in ${remainingMinutes} minute(s) or use Forgot Password to reset.`,
+          message: `Account temporarily locked due to multiple failed login attempts. Try again in ${remainingMinutes} minute(s) or reset password.`,
         });
         return;
       }
 
       user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
-      if (user.failedLoginAttempts >= 5) {
-        user.accountLockedUntil = new Date(Date.now() + 5 * 60 * 1000); // 5 mins lockout
+      if (user.failedLoginAttempts >= 15) {
+        user.accountLockedUntil = new Date(Date.now() + 1 * 60 * 1000); // 1 min lockout
       }
       await user.save();
-      const attemptsLeft = Math.max(0, 5 - user.failedLoginAttempts);
+      const attemptsLeft = Math.max(0, 15 - user.failedLoginAttempts);
       res.status(401).json({
         success: false,
         message: attemptsLeft > 0
           ? `Invalid email or password. (${attemptsLeft} attempt(s) remaining)`
-          : 'Account temporarily locked due to 5 failed attempts. Please reset your password or wait 5 minutes.',
+          : 'Account temporarily locked due to failed attempts. Please try again in 1 minute.',
       });
       return;
     }
