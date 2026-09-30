@@ -7,6 +7,7 @@ import Payment from '../models/Payment';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import sendEmail from '../utils/sendEmail';
 import logAuditAction from '../utils/auditLogger';
+import { emitToHotel, emitToSuperAdmin, emitGlobal } from '../utils/socketService';
 import {
   hotelApprovedEmailTemplate,
   hotelRejectedEmailTemplate,
@@ -347,6 +348,12 @@ export const updateHotelStatus = async (req: AuthenticatedRequest, res: Response
       });
     }
 
+    // ⚡ Socket.IO Realtime Broadcasts
+    emitToHotel(hotel._id, 'HOTEL_UPDATED', { hotel });
+    emitToSuperAdmin('HOTEL_UPDATED', { hotel });
+    emitGlobal('HOTEL_UPDATED', { hotel });
+    emitGlobal('HOTEL_STATUS_UPDATED', { hotel });
+
     res.status(200).json({
       success: true,
       message: `Hotel '${hotel.name}' status updated to ${status}. An email with the reason was sent to ${hotel.ownerEmail}. ${
@@ -361,6 +368,100 @@ export const updateHotelStatus = async (req: AuthenticatedRequest, res: Response
         statusReason: hotel.statusReason,
         ownerEmail: hotel.ownerEmail,
       },
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Update Hotel Details, Status, or Trial/Subscription (Super Admin Edit)
+// @route   PUT /api/v1/super-admin/hotels/:id
+export const updateHotelDetails = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const hotel = await Hotel.findById(req.params.id);
+    if (!hotel) {
+      res.status(404).json({ success: false, message: 'Hotel not found' });
+      return;
+    }
+
+    const {
+      name,
+      ownerName,
+      ownerEmail,
+      ownerPhone,
+      address,
+      city,
+      state,
+      country,
+      pincode,
+      status,
+      statusReason,
+      totalRooms,
+      hotelType,
+      website,
+      subscriptionPlan,
+      subscriptionStatus,
+      trialEndDate,
+      extendTrialDays,
+    } = req.body;
+
+    if (name) hotel.name = name;
+    if (ownerName) hotel.ownerName = ownerName;
+    if (ownerEmail) hotel.ownerEmail = ownerEmail.toLowerCase();
+    if (ownerPhone) hotel.ownerPhone = ownerPhone;
+    if (address) hotel.address = address;
+    if (city) hotel.city = city;
+    if (state) hotel.state = state;
+    if (country) hotel.country = country;
+    if (pincode) hotel.pincode = pincode;
+    if (status) hotel.status = status;
+    if (statusReason !== undefined) hotel.statusReason = statusReason;
+    if (totalRooms !== undefined) hotel.totalRooms = Number(totalRooms);
+    if (hotelType) hotel.hotelType = hotelType;
+    if (website !== undefined) hotel.website = website;
+
+    // Subscription & Trial Updates
+    if (!hotel.subscription) {
+      hotel.subscription = { plan: 'TRIAL', status: 'TRIAL', trialStartDate: new Date(), trialEndDate: new Date(), autoRenew: false };
+    }
+
+    if (subscriptionPlan) {
+      hotel.subscription.plan = subscriptionPlan;
+    }
+    if (subscriptionStatus) {
+      hotel.subscription.status = subscriptionStatus;
+    }
+    if (trialEndDate) {
+      hotel.subscription.trialEndDate = new Date(trialEndDate);
+    } else if (extendTrialDays && Number(extendTrialDays) > 0) {
+      const currentEnd = hotel.subscription.trialEndDate ? new Date(hotel.subscription.trialEndDate) : new Date();
+      const newEnd = new Date(Math.max(currentEnd.getTime(), Date.now()) + Number(extendTrialDays) * 24 * 60 * 60 * 1000);
+      hotel.subscription.trialEndDate = newEnd;
+    }
+
+    await hotel.save();
+
+    // ⚡ Socket.IO Realtime Broadcasts
+    emitToHotel(hotel._id, 'HOTEL_UPDATED', { hotel });
+    emitToSuperAdmin('HOTEL_UPDATED', { hotel });
+    emitGlobal('HOTEL_UPDATED', { hotel });
+    emitGlobal('SUBSCRIPTION_UPDATED', { hotel });
+    emitGlobal('HOTEL_STATUS_UPDATED', { hotel });
+
+    if (req.user) {
+      await logAuditAction({
+        user: req.user,
+        action: 'HOTEL_EDITED',
+        module: 'HOTELS',
+        hotelId: hotel._id,
+        newValue: { name: hotel.name, status: hotel.status, subscription: hotel.subscription },
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Hotel '${hotel.name}' updated successfully!`,
+      data: hotel,
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -388,6 +489,12 @@ export const extendTrialOrSubscription = async (req: AuthenticatedRequest, res: 
     }
     hotel.status = 'ACTIVE';
     await hotel.save();
+
+    // ⚡ Socket.IO Realtime Broadcasts
+    emitToHotel(hotel._id, 'HOTEL_UPDATED', { hotel });
+    emitToSuperAdmin('HOTEL_UPDATED', { hotel });
+    emitGlobal('HOTEL_UPDATED', { hotel });
+    emitGlobal('SUBSCRIPTION_UPDATED', { hotel });
 
     if (req.user) {
       await logAuditAction({

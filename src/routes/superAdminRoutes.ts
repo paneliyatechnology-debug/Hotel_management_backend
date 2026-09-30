@@ -6,6 +6,7 @@ import {
   approveHotel,
   rejectHotel,
   updateHotelStatus,
+  updateHotelDetails,
   extendTrialOrSubscription,
   resetHotelAdminPassword,
   getSuperAdminAuditLogs,
@@ -27,6 +28,7 @@ router.use(authenticateUser, requireRole('SUPER_ADMIN'));
 router.get('/dashboard', getSuperAdminDashboard);
 router.get('/hotels', getAllHotels);
 router.get('/hotels/:id', getHotelDetails);
+router.put('/hotels/:id', updateHotelDetails);
 router.put('/hotels/:id/approve', approveHotel);
 router.put('/hotels/:id/reject', rejectHotel);
 router.put('/hotels/:id/status', updateHotelStatus);
