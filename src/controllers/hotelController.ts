@@ -91,8 +91,16 @@ export const registerHotel = async (req: Request, res: Response): Promise<void> 
       },
     });
 
-    // Generate secure temporary password for the Hotel Admin
-    const rawTempPassword = 'Adm@' + crypto.randomBytes(4).toString('hex') + '#26';
+    // Determine password: use user-provided password or generate a name-related password (e.g. Ramesh@123)
+    let finalPassword = req.body.password && req.body.password.trim().length >= 4 ? req.body.password.trim() : '';
+
+    if (!finalPassword) {
+      const cleanFirstName = (ownerName || name || 'Admin').trim().split(' ')[0].replace(/[^a-zA-Z0-9]/g, '');
+      const capitalizedName = cleanFirstName
+        ? cleanFirstName.charAt(0).toUpperCase() + cleanFirstName.slice(1)
+        : 'Admin';
+      finalPassword = `${capitalizedName}@123`;
+    }
 
     // Create or update the Hotel Admin user account
     let adminUser = await User.findOne({ email: hotel.ownerEmail.toLowerCase() });
@@ -100,23 +108,26 @@ export const registerHotel = async (req: Request, res: Response): Promise<void> 
       adminUser = await User.create({
         name: hotel.ownerName,
         email: hotel.ownerEmail.toLowerCase(),
-        password: rawTempPassword,
+        password: finalPassword,
         phone: hotel.ownerPhone,
         role: 'HOTEL_ADMIN',
         hotel: hotel._id,
         status: 'ACTIVE',
-        mustChangePassword: true,
+        mustChangePassword: false,
+        failedLoginAttempts: 0,
       });
     } else {
-      adminUser.password = rawTempPassword;
+      adminUser.password = finalPassword;
       adminUser.role = 'HOTEL_ADMIN';
       adminUser.hotel = hotel._id as any;
       adminUser.status = 'ACTIVE';
-      adminUser.mustChangePassword = true;
+      adminUser.mustChangePassword = false;
+      adminUser.failedLoginAttempts = 0;
+      adminUser.accountLockedUntil = undefined;
       await adminUser.save();
     }
 
-    const loginUrl = process.env.ADMIN_URL || 'https://hotel-management-admin-livid.vercel.app';
+    const loginUrl = process.env.ADMIN_URL || 'http://localhost:3000/login';
 
     // Send Credentials Email to Hotel Owner asynchronously (non-blocking)
     sendEmail({
@@ -126,7 +137,7 @@ export const registerHotel = async (req: Request, res: Response): Promise<void> 
         hotelName: hotel.name,
         ownerName: hotel.ownerName,
         adminEmail: hotel.ownerEmail,
-        temporaryPassword: rawTempPassword,
+        temporaryPassword: finalPassword,
         trialStartDate: new Date().toLocaleDateString(),
         trialEndDate: trialEnd.toLocaleDateString(),
         loginUrl,
@@ -137,13 +148,18 @@ export const registerHotel = async (req: Request, res: Response): Promise<void> 
 
     res.status(201).json({
       success: true,
-      message: 'Hotel registered and activated with 30-Day Free Trial! Your login credentials have been sent to your email.',
+      message: 'Hotel registered and activated with 30-Day Free Trial! Your login credentials have been set.',
+      credentials: {
+        email: hotel.ownerEmail,
+        password: finalPassword,
+      },
       data: {
         _id: hotel._id,
         name: hotel.name,
         slug: hotel.slug,
         status: hotel.status,
         ownerEmail: hotel.ownerEmail,
+        generatedPassword: finalPassword,
         trialEndDate: trialEnd,
       },
     });

@@ -409,7 +409,7 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
     }
 
     // Check if user account is active
-    if (user.isActive === false) {
+    if (user.status === 'INACTIVE' || user.status === 'BLOCKED' || user.status === 'DELETED' || user.isDeleted) {
       res.status(403).json({
         success: false,
         message: 'This account has been deactivated. Please contact your hotel administrator.',
