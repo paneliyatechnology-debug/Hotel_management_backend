@@ -100,7 +100,7 @@ export const getTrialRequests = async (req: AuthenticatedRequest, res: Response)
 // @route   PUT /api/v1/super-admin/trial-requests/:id/approve
 export const approveTrialRequest = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { approvedDays, remarks } = req.body;
+    const { approvedDays, customEndDate, remarks } = req.body;
     const trialReq = await TrialRequest.findById(req.params.id);
 
     if (!trialReq) {
@@ -114,9 +114,21 @@ export const approveTrialRequest = async (req: AuthenticatedRequest, res: Respon
       return;
     }
 
-    const daysToAdd = Number(approvedDays) || trialReq.requestedDays || 30;
-    const currentEnd = hotel.subscription?.trialEndDate ? new Date(hotel.subscription.trialEndDate) : new Date();
-    const newEnd = new Date(Math.max(currentEnd.getTime(), Date.now()) + daysToAdd * 24 * 60 * 60 * 1000);
+    let newEnd: Date;
+    if (customEndDate) {
+      const parsed = new Date(customEndDate);
+      if (!isNaN(parsed.getTime())) {
+        newEnd = parsed;
+      } else {
+        const daysToAdd = Number(approvedDays) || trialReq.requestedDays || 30;
+        const currentEnd = hotel.subscription?.trialEndDate ? new Date(hotel.subscription.trialEndDate) : new Date();
+        newEnd = new Date(Math.max(currentEnd.getTime(), Date.now()) + daysToAdd * 24 * 60 * 60 * 1000);
+      }
+    } else {
+      const daysToAdd = Number(approvedDays) || trialReq.requestedDays || 30;
+      const currentEnd = hotel.subscription?.trialEndDate ? new Date(hotel.subscription.trialEndDate) : new Date();
+      newEnd = new Date(Math.max(currentEnd.getTime(), Date.now()) + daysToAdd * 24 * 60 * 60 * 1000);
+    }
 
     if (!hotel.subscription) {
       hotel.subscription = { plan: 'TRIAL', status: 'TRIAL', trialStartDate: new Date(), trialEndDate: newEnd, autoRenew: false };
@@ -128,8 +140,9 @@ export const approveTrialRequest = async (req: AuthenticatedRequest, res: Respon
     hotel.status = 'ACTIVE';
     await hotel.save();
 
+    const formattedEnd = newEnd.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
     trialReq.status = 'APPROVED';
-    trialReq.adminRemarks = remarks || `Approved for +${daysToAdd} days by Super Admin.`;
+    trialReq.adminRemarks = remarks || `Approved until ${formattedEnd} by Super Admin.`;
     await trialReq.save();
 
     // ⚡ Socket.IO Realtime Broadcasts
@@ -145,13 +158,13 @@ export const approveTrialRequest = async (req: AuthenticatedRequest, res: Respon
         action: 'TRIAL_REQUEST_APPROVED',
         module: 'HOTELS',
         hotelId: hotel._id,
-        newValue: { daysToAdd, newEnd, remarks },
+        newValue: { newEnd, remarks },
       });
     }
 
     res.status(200).json({
       success: true,
-      message: `Trial request approved! Extended trial by ${daysToAdd} days for '${hotel.name}'.`,
+      message: `Trial request approved! Trial active until ${formattedEnd} for '${hotel.name}'.`,
       data: { request: trialReq, hotel },
     });
   } catch (error: any) {
