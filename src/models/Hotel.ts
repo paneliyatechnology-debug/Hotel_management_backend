@@ -37,6 +37,7 @@ export interface IHotel extends Document {
     subscriptionEndDate?: Date;
     gracePeriodUntil?: Date;
     autoRenew: boolean;
+    isExpired?: boolean;
   };
 
   // Hotel Profile & Settings

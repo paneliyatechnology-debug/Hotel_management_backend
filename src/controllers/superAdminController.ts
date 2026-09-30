@@ -438,21 +438,37 @@ export const updateHotelDetails = async (req: AuthenticatedRequest, res: Respons
       const parsedDate = new Date(trialEndDate);
       if (!isNaN(parsedDate.getTime())) {
         hotel.subscription.trialEndDate = parsedDate;
+        if (parsedDate > new Date()) {
+          hotel.subscription.status = 'TRIAL';
+          hotel.subscription.isExpired = false;
+          if (hotel.status === 'EXPIRED') {
+            hotel.status = 'ACTIVE';
+          }
+        } else {
+          hotel.subscription.status = 'EXPIRED';
+          hotel.subscription.isExpired = true;
+          hotel.status = 'EXPIRED';
+        }
       }
     } else if (customTrialDays !== undefined && customTrialDays !== null && Number(customTrialDays) > 0) {
       // Set trial for exactly N custom days from now
       hotel.subscription.trialEndDate = new Date(Date.now() + Number(customTrialDays) * 24 * 60 * 60 * 1000);
       hotel.subscription.status = 'TRIAL';
+      hotel.subscription.isExpired = false;
+      if (hotel.status === 'EXPIRED') hotel.status = 'ACTIVE';
     } else if (extendTrialDays && Number(extendTrialDays) > 0) {
       const currentEnd = hotel.subscription.trialEndDate ? new Date(hotel.subscription.trialEndDate) : new Date();
       const newEnd = new Date(Math.max(currentEnd.getTime(), Date.now()) + Number(extendTrialDays) * 24 * 60 * 60 * 1000);
       hotel.subscription.trialEndDate = newEnd;
       hotel.subscription.status = 'TRIAL';
+      hotel.subscription.isExpired = false;
+      if (hotel.status === 'EXPIRED') hotel.status = 'ACTIVE';
     }
 
     // If trial was extended/updated and date is in the future, reactivate hotel if it was EXPIRED
-    if (hotel.subscription.trialEndDate && new Date(hotel.subscription.trialEndDate) > new Date() && hotel.status === 'EXPIRED') {
-      hotel.status = 'ACTIVE';
+    if (hotel.subscription.trialEndDate && new Date(hotel.subscription.trialEndDate) > new Date()) {
+      hotel.subscription.isExpired = false;
+      if (hotel.status === 'EXPIRED') hotel.status = 'ACTIVE';
     }
 
     await hotel.save();
