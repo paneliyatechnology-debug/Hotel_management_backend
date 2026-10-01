@@ -12,7 +12,7 @@ const BASE_STYLES = `
 `;
 
 const DEFAULT_ADMIN_URL = process.env.ADMIN_URL || 'https://hotel-management-admin-livid.vercel.app';
-const DEFAULT_WEB_URL = process.env.WEB_URL || 'https://hotel-management-web-livid.vercel.app';
+const DEFAULT_WEB_URL = process.env.WEB_URL || 'https://myownpms.com';
 
 // 🌟 Reusable Personalized Poster / Hero Card Generator
 const renderPosterBanner = ({

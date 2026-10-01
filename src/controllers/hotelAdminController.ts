@@ -590,7 +590,7 @@ export const createReceptionist = async (req: AuthenticatedRequest, res: Respons
     });
 
     // Send credentials email
-    const loginUrl = process.env.WEB_URL ? `${process.env.WEB_URL}/login` : 'https://hotel-management-web-livid.vercel.app/login';
+    const loginUrl = process.env.WEB_URL ? `${process.env.WEB_URL}/login` : 'https://myownpms.com/login';
     try {
       await sendEmail({
         email: staffMember.email,
