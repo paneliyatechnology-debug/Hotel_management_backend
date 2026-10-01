@@ -153,6 +153,7 @@ export const ensureDefaultPlansExist = async (): Promise<void> => {
 // @route   GET /api/v1/subscription-plans
 export const getPublicSubscriptionPlans = async (req: Request, res: Response): Promise<void> => {
   try {
+    await ensureDefaultPlansExist();
     const plans = await SubscriptionPlan.find({ isActive: true, isDeleted: { $ne: true } }).sort({ displayOrder: 1, price: 1 });
 
     const monthlyPlans = plans.filter((p) => p.billingCycle === 'MONTHLY');
@@ -175,6 +176,7 @@ export const getPublicSubscriptionPlans = async (req: Request, res: Response): P
 // @route   GET /api/v1/super-admin/subscription-plans
 export const getSuperAdminSubscriptionPlans = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    await ensureDefaultPlansExist();
     const plans = await SubscriptionPlan.find({ isDeleted: { $ne: true } }).sort({ billingCycle: 1, displayOrder: 1, price: 1 });
 
     const monthlyCount = plans.filter((p) => p.billingCycle === 'MONTHLY').length;

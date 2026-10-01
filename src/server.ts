@@ -17,11 +17,15 @@ import subscriptionPlanRoutes from './routes/subscriptionPlanRoutes';
 import signatureSyncRoutes from './routes/signatureSyncRoutes';
 import settingsRoutes from './routes/settingsRoutes';
 
+import { ensureDefaultPlansExist } from './controllers/subscriptionPlanController';
+
 // Load environment variables
 dotenv.config();
 
 // Connect to MongoDB
-connectDB();
+connectDB().then(() => {
+  ensureDefaultPlansExist().catch((err) => console.error('Error seeding default plans:', err));
+});
 
 const app = express();
 const httpServer = http.createServer(app);
