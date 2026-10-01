@@ -204,7 +204,7 @@ export const approveHotel = async (req: AuthenticatedRequest, res: Response): Pr
       await adminUser.save();
     }
 
-    const loginUrl = process.env.ADMIN_URL || 'https://hotel-management-admin-livid.vercel.app/login';
+    const loginUrl = process.env.WEB_URL ? `${process.env.WEB_URL}/login` : 'https://hotel-management-web-livid.vercel.app/login';
     try {
       await sendEmail({
         email: hotel.ownerEmail,

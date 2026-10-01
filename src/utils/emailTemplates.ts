@@ -144,7 +144,7 @@ export const hotelApprovedEmailTemplate = (data: {
   trialStartDate: string;
   trialEndDate: string;
 }): string => {
-  const portalUrl = data.loginUrl || DEFAULT_ADMIN_URL;
+  const portalUrl = data.loginUrl || `${DEFAULT_WEB_URL}/login`;
 
   return `
     <div style="${BASE_STYLES}">
@@ -330,7 +330,7 @@ export const receptionistCredentialsEmailTemplate = (data: {
   employeeId?: string;
   loginUrl: string;
 }): string => {
-  const portalUrl = data.loginUrl || `${DEFAULT_ADMIN_URL}/login`;
+  const portalUrl = data.loginUrl || `${DEFAULT_WEB_URL}/login`;
 
   return `
     <div style="${BASE_STYLES}">
