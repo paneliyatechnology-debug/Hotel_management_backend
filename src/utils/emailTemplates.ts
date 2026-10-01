@@ -537,37 +537,37 @@ export const guestBookingConfirmationTemplate = (data: GuestBookingEmailData): s
   const defaultInstructions = [
     {
       icon: '⏰',
-      title: 'Check-Out Timing (ચેક-આઉટ સમય)',
+      title: 'Check-Out Timing',
       desc: 'Standard Check-Out is strictly 12:00 PM (Noon). For late checkout, please coordinate with front desk in advance.',
     },
     {
       icon: '🆔',
-      title: 'Government ID Compliance (ઓળખપત્ર)',
+      title: 'Government ID Compliance',
       desc: 'Original Government Photo ID is required for all adult guests as per local hospitality regulations.',
     },
     {
       icon: '🚭',
-      title: '100% Smoke-Free Rooms (સ્મોકિંગ મનાઈ)',
+      title: '100% Smoke-Free Rooms',
       desc: 'All indoor guest rooms, bathrooms and corridors are strictly non-smoking zones. Designated outdoor areas are available.',
     },
     {
       icon: '🤫',
-      title: 'Quiet Hours (શાંતિ સમય)',
+      title: 'Quiet Hours',
       desc: 'Quiet hours are observed from 10:00 PM to 07:00 AM to ensure peaceful rest for all staying guests.',
     },
     {
       icon: '🔑',
-      title: 'Keycard & Room Security (રૂમ સુરક્ષા)',
+      title: 'Keycard & Room Security',
       desc: 'Please ensure your door is locked properly whenever exiting. Secure lockers are available inside your room.',
     },
     {
       icon: '🍽️',
-      title: '24/7 Room Service & Dining (રૂમ સર્વિસ)',
+      title: '24/7 Room Service & Dining',
       desc: 'Dial Intercom 9 from your room telephone to order fresh meals, refreshments, snacks, or bottled water.',
     },
     {
       icon: '🧹',
-      title: 'Housekeeping & Assistance (હાઉસકીપિંગ)',
+      title: 'Housekeeping & Assistance',
       desc: 'Dial Intercom 0 anytime for room cleaning, extra towels, pillows, or front desk assistance.',
     },
   ];
@@ -677,10 +677,10 @@ export const guestBookingConfirmationTemplate = (data: GuestBookingEmailData): s
           </table>
         </div>
 
-        <!-- 3. 🌟 Room Amenities & In-Room Privileges (રૂમ ની Amenities / સુવિધાઓ) -->
+        <!-- 3. 🌟 Room Amenities & In-Room Privileges -->
         <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 1.5px solid #38bdf8; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 14px rgba(56, 189, 248, 0.1);">
           <h3 style="color: #38bdf8; margin: 0 0 10px 0; font-size: 16px; border-bottom: 1px solid #334155; padding-bottom: 10px;">
-            ✨ Room Amenities & In-Room Privileges (રૂમ ની સુવિધાઓ)
+            ✨ Room Amenities & In-Room Privileges
           </h3>
           <p style="color: #94a3b8; font-size: 13px; margin: 0 0 14px 0;">
             Your allocated room is fully prepared with the following premium amenities:
@@ -703,10 +703,10 @@ export const guestBookingConfirmationTemplate = (data: GuestBookingEmailData): s
           </table>
         </div>
 
-        <!-- 4. 📋 Important Room Instructions & Guidelines (રૂમ ના મહત્વપૂર્ણ સુચનાઓ / નિયમો) -->
+        <!-- 4. 📋 Important Room Instructions & Guidelines -->
         <div style="background: #1e293b; border: 1.5px solid #f59e0b; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
           <h3 style="color: #f59e0b; margin: 0 0 12px 0; font-size: 16px; border-bottom: 1px solid #334155; padding-bottom: 10px;">
-            📋 Important Room Instructions & House Rules (રૂમ ના નિયમો અને સુચનાઓ)
+            📋 Important Room Instructions & House Rules
           </h3>
           <p style="color: #94a3b8; font-size: 13px; margin: 0 0 14px 0;">
             To ensure your safety, comfort, and seamless stay experience, kindly observe the following guidelines:
