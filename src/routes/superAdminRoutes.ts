@@ -10,6 +10,7 @@ import {
   extendTrialOrSubscription,
   resetHotelAdminPassword,
   getSuperAdminAuditLogs,
+  getHotelGuestsForSuperAdmin,
 } from '../controllers/superAdminController';
 import {
   getTrialRequests,
@@ -39,6 +40,7 @@ router.put('/hotels/:id/reject', rejectHotel);
 router.put('/hotels/:id/status', updateHotelStatus);
 router.put('/hotels/:id/extend-trial', extendTrialOrSubscription);
 router.put('/hotels/:id/reset-admin-password', resetHotelAdminPassword);
+router.get('/hotels/:id/guests', getHotelGuestsForSuperAdmin);
 router.get('/audit-logs', getSuperAdminAuditLogs);
 
 // Trial Extension Requests Management

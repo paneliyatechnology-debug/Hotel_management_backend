@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { Response } from 'express';
 import crypto from 'crypto';
 import Hotel from '../models/Hotel';
@@ -5,6 +6,8 @@ import User from '../models/User';
 import AuditLog from '../models/AuditLog';
 import Payment from '../models/Payment';
 import SubscriptionPlan from '../models/SubscriptionPlan';
+import Guest from '../models/Guest';
+import Booking from '../models/Booking';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import sendEmail from '../utils/sendEmail';
 import logAuditAction from '../utils/auditLogger';
@@ -623,6 +626,94 @@ export const getSuperAdminAuditLogs = async (req: AuthenticatedRequest, res: Res
 
     const logs = await AuditLog.find(query).sort({ timestamp: -1 }).limit(Number(limit));
     res.status(200).json({ success: true, count: logs.length, data: logs });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get All Guests of a Specific Hotel (Super Admin View & Search)
+// @route   GET /api/v1/super-admin/hotels/:id/guests
+export const getHotelGuestsForSuperAdmin = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const hotelId = req.params.id as string;
+    if (!hotelId || !mongoose.Types.ObjectId.isValid(hotelId)) {
+      res.status(400).json({ success: false, message: 'Invalid hotel ID context' });
+      return;
+    }
+
+    const hotel = await Hotel.findById(hotelId).select('name ownerName ownerEmail city phone');
+    if (!hotel) {
+      res.status(404).json({ success: false, message: 'Hotel not found' });
+      return;
+    }
+
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string) || 10));
+    const search = (req.query.search as string || '').trim();
+
+    const hotelObjId = new mongoose.Types.ObjectId(hotelId);
+    const query: any = {
+      hotel: hotelObjId,
+      isDeleted: { $ne: true },
+    };
+
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'i');
+      query.$or = [
+        { fullName: regex },
+        { mobileNumber: regex },
+        { email: regex },
+        { city: regex },
+        { 'idProof.idNumber': regex },
+      ];
+    }
+
+    const totalRecords = await Guest.countDocuments(query);
+    const totalPages = Math.ceil(totalRecords / limit) || 1;
+
+    const guests = await Guest.find(query)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit);
+
+    const guestIds = guests.map((g) => g._id);
+    const latestBookings = await Booking.find({
+      guest: { $in: guestIds },
+      hotel: hotelObjId,
+    })
+      .populate('room', 'roomNumber')
+      .sort({ createdAt: -1 });
+
+    const formattedGuests = guests.map((g) => {
+      const gObj = g.toObject();
+      const booking = latestBookings.find((b) => b.guest?.toString() === g._id.toString());
+      return {
+        ...gObj,
+        latestBookingNumber: booking?.bookingNumber || 'N/A',
+        latestRoomNumber: (booking?.room as any)?.roomNumber || 'N/A',
+        latestBookingStatus: booking?.status || 'COMPLETED',
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      hotel: {
+        _id: hotel._id,
+        name: hotel.name,
+        ownerName: hotel.ownerName,
+        city: hotel.city,
+      },
+      data: formattedGuests,
+      pagination: {
+        page,
+        limit,
+        totalRecords,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
