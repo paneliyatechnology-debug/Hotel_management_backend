@@ -12,6 +12,7 @@ const BASE_STYLES = `
 `;
 
 const DEFAULT_ADMIN_URL = process.env.ADMIN_URL || 'https://hotel-management-admin-livid.vercel.app';
+const DEFAULT_WEB_URL = process.env.WEB_URL || 'https://hotel-management-web-livid.vercel.app';
 
 // 🌟 Reusable Personalized Poster / Hero Card Generator
 const renderPosterBanner = ({
@@ -293,7 +294,7 @@ export const hotelStatusDisabledEmailTemplate = (data: {
 
 // 5. Hotel Re-Enabled / Activated Notification
 export const hotelReEnabledEmailTemplate = (hotelName: string, ownerName: string): string => {
-  const portalUrl = `${DEFAULT_ADMIN_URL}/login`;
+  const portalUrl = `${DEFAULT_WEB_URL}/login`;
 
   return `
     <div style="${BASE_STYLES}">

@@ -4,6 +4,7 @@ import Hotel from '../models/Hotel';
 import User from '../models/User';
 import AuditLog from '../models/AuditLog';
 import Payment from '../models/Payment';
+import SubscriptionPlan from '../models/SubscriptionPlan';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import sendEmail from '../utils/sendEmail';
 import logAuditAction from '../utils/auditLogger';
@@ -27,7 +28,6 @@ export const getSuperAdminDashboard = async (req: AuthenticatedRequest, res: Res
     const expiredHotels = await Hotel.countDocuments({ status: 'EXPIRED', isDeleted: false });
 
     const trialHotels = await Hotel.countDocuments({ 'subscription.status': 'TRIAL', isDeleted: false });
-    const paidHotels = await Hotel.countDocuments({ 'subscription.status': 'ACTIVE', isDeleted: false });
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -36,25 +36,37 @@ export const getSuperAdminDashboard = async (req: AuthenticatedRequest, res: Res
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
-    const paymentsSummary = await Payment.aggregate([
-      { $match: { paymentStatus: 'PAID' } },
-      { $group: { _id: null, totalRevenue: { $sum: '$amount' } } },
-    ]);
-    const totalRevenue = paymentsSummary.length > 0 ? paymentsSummary[0].totalRevenue : 0;
+    // Fetch all subscription plans
+    const allPlans = await SubscriptionPlan.find({ isDeleted: false });
 
-    const todayPayments = await Payment.aggregate([
-      { $match: { paymentStatus: 'PAID', createdAt: { $gte: startOfToday } } },
-      { $group: { _id: null, revenue: { $sum: '$amount' } } },
-    ]);
-    const todayRevenue = todayPayments.length > 0 ? todayPayments[0].revenue : 0;
+    // Find all hotels with non-trial active paid subscriptions (BASIC, STANDARD, PREMIUM, etc.)
+    const paidHotelsList = await Hotel.find({
+      isDeleted: false,
+      'subscription.status': 'ACTIVE',
+      'subscription.plan': { $nin: ['TRIAL', 'TRIAL_EXPIRED', null] },
+    });
 
-    const monthPayments = await Payment.aggregate([
-      { $match: { paymentStatus: 'PAID', createdAt: { $gte: startOfMonth } } },
-      { $group: { _id: null, revenue: { $sum: '$amount' } } },
-    ]);
-    const monthlyRevenue = monthPayments.length > 0 ? monthPayments[0].revenue : 0;
+    const paidHotels = paidHotelsList.length;
+    let totalRevenue = 0;
+    let monthlyRevenue = 0;
+    let todayRevenue = 0;
+    const totalOrders = paidHotelsList.length;
 
-    const totalOrders = await Payment.countDocuments({ paymentStatus: 'PAID' });
+    paidHotelsList.forEach((h) => {
+      const planCode = h.subscription?.plan;
+      const matchedPlan = allPlans.find(
+        (p) => p.name?.toLowerCase() === planCode?.toLowerCase() || p.code?.toLowerCase() === planCode?.toLowerCase()
+      );
+      const planPrice = matchedPlan?.price || 0;
+
+      totalRevenue += planPrice;
+      monthlyRevenue += planPrice;
+
+      const startDate = h.subscription?.subscriptionStartDate ? new Date(h.subscription.subscriptionStartDate) : null;
+      if (startDate && startDate >= startOfToday) {
+        todayRevenue += planPrice;
+      }
+    });
 
     const recentPending = await Hotel.find({ status: 'PENDING_APPROVAL', isDeleted: false })
       .sort({ createdAt: -1 })
@@ -222,6 +234,10 @@ export const approveHotel = async (req: AuthenticatedRequest, res: Response): Pr
       });
     }
 
+    // ⚡ Socket.IO Realtime Broadcasts
+    emitToHotel(hotel._id, 'HOTEL_STATUS_UPDATED', { hotel });
+    emitToSuperAdmin('HOTEL_STATUS_UPDATED', { hotel });
+
     res.status(200).json({
       success: true,
       message: `Hotel '${hotel.name}' approved successfully. Hotel Admin account created and credentials emailed.`,
@@ -272,6 +288,10 @@ export const rejectHotel = async (req: AuthenticatedRequest, res: Response): Pro
         newValue: { status: 'REJECTED', reason: hotel.rejectionReason },
       });
     }
+
+    // ⚡ Socket.IO Realtime Broadcasts
+    emitToHotel(hotel._id, 'HOTEL_STATUS_UPDATED', { hotel });
+    emitToSuperAdmin('HOTEL_STATUS_UPDATED', { hotel });
 
     res.status(200).json({
       success: true,
@@ -349,10 +369,8 @@ export const updateHotelStatus = async (req: AuthenticatedRequest, res: Response
     }
 
     // ⚡ Socket.IO Realtime Broadcasts
-    emitToHotel(hotel._id, 'HOTEL_UPDATED', { hotel });
-    emitToSuperAdmin('HOTEL_UPDATED', { hotel });
-    emitGlobal('HOTEL_UPDATED', { hotel });
-    emitGlobal('HOTEL_STATUS_UPDATED', { hotel });
+    emitToHotel(hotel._id, 'HOTEL_STATUS_UPDATED', { hotel });
+    emitToSuperAdmin('HOTEL_STATUS_UPDATED', { hotel });
 
     res.status(200).json({
       success: true,
@@ -473,11 +491,8 @@ export const updateHotelDetails = async (req: AuthenticatedRequest, res: Respons
     await hotel.save();
 
     // ⚡ Socket.IO Realtime Broadcasts
-    emitToHotel(hotel._id, 'HOTEL_UPDATED', { hotel });
-    emitToSuperAdmin('HOTEL_UPDATED', { hotel });
-    emitGlobal('HOTEL_UPDATED', { hotel });
-    emitGlobal('SUBSCRIPTION_UPDATED', { hotel });
-    emitGlobal('HOTEL_STATUS_UPDATED', { hotel });
+    emitToHotel(hotel._id, 'HOTEL_STATUS_UPDATED', { hotel });
+    emitToSuperAdmin('HOTEL_STATUS_UPDATED', { hotel });
 
     if (req.user) {
       await logAuditAction({

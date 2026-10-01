@@ -179,14 +179,29 @@ export const getHotelProfile = async (req: AuthenticatedRequest, res: Response):
 export const createRoomType = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { name, description, basePrice, capacity, bedCount, bedType, amenities, images } = req.body;
-    if (!name) {
+    if (!name || !name.trim()) {
       res.status(400).json({ success: false, message: 'Room category name is required.' });
+      return;
+    }
+
+    const trimmedName = name.trim();
+    const existingCategory = await RoomType.findOne({
+      hotel: req.hotelId,
+      name: { $regex: new RegExp(`^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+      isDeleted: { $ne: true },
+    });
+
+    if (existingCategory) {
+      res.status(400).json({
+        success: false,
+        message: `A room category named '${trimmedName}' already exists for your hotel. Category names must be unique.`,
+      });
       return;
     }
 
     const roomType = await RoomType.create({
       hotel: req.hotelId,
-      name,
+      name: trimmedName,
       description: description || '',
       basePrice: Number(basePrice) || 0,
       capacity: capacity || { adults: 2, children: 0 },
@@ -215,7 +230,27 @@ export const updateRoomType = async (req: AuthenticatedRequest, res: Response): 
       return;
     }
 
-    if (name) roomType.name = name;
+    if (name && name.trim()) {
+      const trimmedName = name.trim();
+      if (trimmedName.toLowerCase() !== roomType.name.trim().toLowerCase()) {
+        const existingCategory = await RoomType.findOne({
+          hotel: req.hotelId,
+          _id: { $ne: req.params.id },
+          name: { $regex: new RegExp(`^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+          isDeleted: { $ne: true },
+        });
+
+        if (existingCategory) {
+          res.status(400).json({
+            success: false,
+            message: `A room category named '${trimmedName}' already exists for your hotel. Category names must be unique.`,
+          });
+          return;
+        }
+      }
+      roomType.name = trimmedName;
+    }
+
     if (description !== undefined) roomType.description = description;
     if (basePrice !== undefined) roomType.basePrice = Number(basePrice);
     if (capacity) roomType.capacity = { adults: Number(capacity.adults || 2), children: Number(capacity.children || 1) };
@@ -273,6 +308,23 @@ export const createRoom = async (req: AuthenticatedRequest, res: Response): Prom
     if (!roomNumber || !roomType) {
       res.status(400).json({ success: false, message: 'Room number and room category are required.' });
       return;
+    }
+
+    // 🔒 SUBSCRIPTION TRIAL ROOM LIMIT CHECK (Free Trial = max 5 rooms)
+    const hotel = await Hotel.findById(req.hotelId);
+    const plan = hotel?.subscription?.plan || 'TRIAL';
+    const subStatus = hotel?.subscription?.status || 'TRIAL';
+    const isFreeTrial = plan === 'TRIAL' || subStatus === 'TRIAL';
+
+    if (isFreeTrial) {
+      const activeRoomCount = await Room.countDocuments({ hotel: req.hotelId, isDeleted: { $ne: true } });
+      if (activeRoomCount >= 5) {
+        res.status(403).json({
+          success: false,
+          message: 'Free Trial Limit Reached! Free Trial plan allows creating up to 5 custom rooms. Please upgrade to a Premium plan to add more rooms.',
+        });
+        return;
+      }
     }
 
     const targetFloor = Number(floor) || 1;
@@ -538,7 +590,7 @@ export const createReceptionist = async (req: AuthenticatedRequest, res: Respons
     });
 
     // Send credentials email
-    const loginUrl = process.env.ADMIN_URL || 'https://hotel-management-admin-livid.vercel.app/login';
+    const loginUrl = process.env.WEB_URL ? `${process.env.WEB_URL}/login` : 'https://hotel-management-web-livid.vercel.app/login';
     try {
       await sendEmail({
         email: staffMember.email,
@@ -976,11 +1028,17 @@ export const deleteReceptionist = async (req: AuthenticatedRequest, res: Respons
 // @route   GET /api/v1/admin/daily-collections
 export const getDailyCollectionsReconciliation = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const hotelId = req.hotelId || req.user?.hotel;
-    if (!hotelId) {
-      res.status(400).json({ success: false, message: 'Hotel context missing' });
+    const rawHotelId = req.hotelId || (req.user?.hotel as any)?._id || req.user?.hotel;
+    const hotelIdStr = typeof rawHotelId === 'object' && rawHotelId?._id
+      ? rawHotelId._id.toString()
+      : String(rawHotelId || '');
+
+    if (!hotelIdStr || !mongoose.Types.ObjectId.isValid(hotelIdStr)) {
+      res.status(400).json({ success: false, message: 'Hotel context missing or invalid' });
       return;
     }
+
+    const hotelObjId = new mongoose.Types.ObjectId(hotelIdStr);
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -1013,7 +1071,7 @@ export const getDailyCollectionsReconciliation = async (req: AuthenticatedReques
 
     // Fetch all today payments for global KPI aggregation
     const allTodayPayments = await Payment.find({
-      hotel: hotelId,
+      hotel: hotelObjId,
       paymentStatus: 'PAID',
       createdAt: { $gte: startOfToday, $lte: endOfToday },
     });
@@ -1038,7 +1096,7 @@ export const getDailyCollectionsReconciliation = async (req: AuthenticatedReques
 
     // Backend Search & Paginated Query Construction
     const filterQuery: any = {
-      hotel: hotelId,
+      hotel: hotelObjId,
       paymentStatus: 'PAID',
       createdAt: { $gte: startOfToday, $lte: endOfToday },
     };
@@ -1048,19 +1106,20 @@ export const getDailyCollectionsReconciliation = async (req: AuthenticatedReques
     }
 
     if (search) {
-      const searchRegex = new RegExp(search, 'i');
+      const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const searchRegex = new RegExp(escapedSearch, 'i');
       const matchingGuests = await Guest.find({
-        hotel: hotelId,
+        hotel: hotelObjId,
         $or: [{ fullName: searchRegex }, { mobileNumber: searchRegex }],
       }).select('_id');
 
       const matchingRooms = await Room.find({
-        hotel: hotelId,
+        hotel: hotelObjId,
         roomNumber: searchRegex,
       }).select('_id');
 
       const matchingBookings = await Booking.find({
-        hotel: hotelId,
+        hotel: hotelObjId,
         $or: [
           { bookingNumber: searchRegex },
           { room: { $in: matchingRooms.map((r) => r._id) } },
@@ -1095,7 +1154,7 @@ export const getDailyCollectionsReconciliation = async (req: AuthenticatedReques
 
     // Unsettled Cash in Counter Drawer (All unsettled cash regardless of day)
     const unsettledPayments = await Payment.find({
-      hotel: hotelId,
+      hotel: hotelObjId,
       paymentStatus: 'PAID',
       drawerSettlementStatus: { $ne: 'SETTLED_TO_ADMIN' },
     })
@@ -1121,7 +1180,6 @@ export const getDailyCollectionsReconciliation = async (req: AuthenticatedReques
     });
 
     const totalUnsettled = cashInDrawer + unsettledUpi + unsettledCard + unsettledBank;
-    const hotelObjId = new mongoose.Types.ObjectId(hotelId.toString());
 
     // Yesterday's Revenue for comparison
     const yesterdayPayments = await Payment.aggregate([
@@ -1144,7 +1202,7 @@ export const getDailyCollectionsReconciliation = async (req: AuthenticatedReques
     const lastMonthGross = lastMonthPayments.length > 0 ? lastMonthPayments[0].total : 0;
 
     // Daily Benchmark target: e.g. active rooms * 1800 or 15000 min
-    const totalActiveRooms = await Room.countDocuments({ hotel: hotelId, isActive: true });
+    const totalActiveRooms = await Room.countDocuments({ hotel: hotelObjId, isActive: true });
     const dailyTarget = Math.max(15000, totalActiveRooms * 1800);
     const dailyTargetPercentage = Math.min(200, Number(((todayGross / dailyTarget) * 100).toFixed(1)));
 
@@ -1177,10 +1235,10 @@ export const getDailyCollectionsReconciliation = async (req: AuthenticatedReques
     const totalVaultSettled = vaultSumAgg.length > 0 ? vaultSumAgg[0].total : 0;
 
     // Handover History Pagination & Queries
-    const totalHandoverRecords = await CashHandover.countDocuments({ hotel: hotelId });
+    const totalHandoverRecords = await CashHandover.countDocuments({ hotel: hotelObjId });
     const totalHandoverPages = Math.ceil(totalHandoverRecords / handoverLimit) || 1;
 
-    const paginatedHandoverRecords = await CashHandover.find({ hotel: hotelId })
+    const paginatedHandoverRecords = await CashHandover.find({ hotel: hotelObjId })
       .populate('settledByAdmin', 'name email role')
       .sort({ createdAt: -1 })
       .skip((handoverPage - 1) * handoverLimit)
