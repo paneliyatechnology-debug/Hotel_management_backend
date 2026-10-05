@@ -16,6 +16,7 @@ import receptionistRoutes from './routes/receptionistRoutes';
 import subscriptionPlanRoutes from './routes/subscriptionPlanRoutes';
 import signatureSyncRoutes from './routes/signatureSyncRoutes';
 import settingsRoutes from './routes/settingsRoutes';
+import uploadRoutes from './routes/uploadRoutes';
 
 import { ensureDefaultPlansExist } from './controllers/subscriptionPlanController';
 
@@ -71,6 +72,8 @@ app.use('/api/v1/receptionist', receptionistRoutes);
 app.use('/api/receptionist', receptionistRoutes);
 app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/v1/upload', uploadRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Health Check & Documentation Overview
 app.get('/', (req: Request, res: Response) => {

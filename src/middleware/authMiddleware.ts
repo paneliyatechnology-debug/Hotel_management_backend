@@ -55,6 +55,18 @@ export const authenticateUser = async (
     req.user = user;
     if (user.hotel) {
       req.hotelId = user.hotel.toString();
+    } else if (req.headers['x-hotel-id']) {
+      req.hotelId = req.headers['x-hotel-id'] as string;
+    } else if (req.query.hotelId) {
+      req.hotelId = req.query.hotelId as string;
+    }
+
+    if (!req.hotelId && user.role === 'SUPER_ADMIN') {
+      const defaultHotel = await Hotel.findOne({ isDeleted: { $ne: true } }).sort({ createdAt: 1 });
+      if (defaultHotel) {
+        req.hotelId = defaultHotel._id.toString();
+        req.hotel = defaultHotel;
+      }
     }
 
     next();
@@ -78,6 +90,11 @@ export const requireRole = (...roles: UserRole[]) => {
     if (!req.user) {
       res.status(401).json({ success: false, message: 'Authentication required.' });
       return;
+    }
+
+    // SUPER_ADMIN has full platform authorization across all portals/operations
+    if (req.user.role === 'SUPER_ADMIN') {
+      return next();
     }
 
     if (!roles.includes(req.user.role)) {
@@ -105,6 +122,10 @@ export const requireActiveHotel = async (
 
   // Super Admin can access globally without being tied to an active hotel check
   if (req.user.role === 'SUPER_ADMIN') {
+    if (!req.hotel && req.hotelId) {
+      const hotel = await Hotel.findById(req.hotelId);
+      if (hotel) req.hotel = hotel;
+    }
     return next();
   }
 

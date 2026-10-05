@@ -29,46 +29,69 @@ export const getSuperAdminDashboard = async (req: AuthenticatedRequest, res: Res
     const suspendedHotels = await Hotel.countDocuments({ status: 'SUSPENDED', isDeleted: false });
     const disabledHotels = await Hotel.countDocuments({ status: 'DISABLED', isDeleted: false });
     const expiredHotels = await Hotel.countDocuments({ status: 'EXPIRED', isDeleted: false });
-
     const trialHotels = await Hotel.countDocuments({ 'subscription.status': 'TRIAL', isDeleted: false });
 
+    // Dates
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
 
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const diffToMonday = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+    const startOfWeek = new Date(now.setDate(diffToMonday));
+    startOfWeek.setHours(0, 0, 0, 0);
 
-    // Fetch all subscription plans
-    const allPlans = await SubscriptionPlan.find({ isDeleted: false });
+    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
-    // Find all hotels with non-trial active paid subscriptions (BASIC, STANDARD, PREMIUM, etc.)
-    const paidHotelsList = await Hotel.find({
-      isDeleted: false,
-      'subscription.status': 'ACTIVE',
-      'subscription.plan': { $nin: ['TRIAL', 'TRIAL_EXPIRED', null] },
+    // Global Multi-Hotel Metrics
+    const totalGuests = await Guest.countDocuments({ isDeleted: { $ne: true } });
+    const totalBookings = await Booking.countDocuments({ isDeleted: { $ne: true } });
+
+    const todayCheckIns = await Booking.countDocuments({
+      isDeleted: { $ne: true },
+      checkInDate: { $gte: startOfToday, $lte: endOfToday },
+    });
+    const todayCheckOuts = await Booking.countDocuments({
+      isDeleted: { $ne: true },
+      checkOutDate: { $gte: startOfToday, $lte: endOfToday },
     });
 
-    const paidHotels = paidHotelsList.length;
-    let totalRevenue = 0;
-    let monthlyRevenue = 0;
-    let todayRevenue = 0;
-    const totalOrders = paidHotelsList.length;
+    // Real Payment Aggregations
+    const allPaymentsAgg = await Payment.aggregate([
+      { $match: { paymentStatus: 'PAID' } },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
+    const weeklyPaymentsAgg = await Payment.aggregate([
+      { $match: { paymentStatus: 'PAID', createdAt: { $gte: startOfWeek } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
+    const monthlyPaymentsAgg = await Payment.aggregate([
+      { $match: { paymentStatus: 'PAID', createdAt: { $gte: startOfMonth } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
+    const todayPaymentsAgg = await Payment.aggregate([
+      { $match: { paymentStatus: 'PAID', createdAt: { $gte: startOfToday, $lte: endOfToday } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
 
-    paidHotelsList.forEach((h) => {
-      const planCode = h.subscription?.plan;
-      const matchedPlan = allPlans.find(
-        (p) => p.name?.toLowerCase() === planCode?.toLowerCase() || p.code?.toLowerCase() === planCode?.toLowerCase()
-      );
-      const planPrice = matchedPlan?.price || 0;
+    const totalRevenue = allPaymentsAgg.length > 0 ? allPaymentsAgg[0].total : 0;
+    const weeklyRevenue = weeklyPaymentsAgg.length > 0 ? weeklyPaymentsAgg[0].total : 0;
+    const monthlyRevenue = monthlyPaymentsAgg.length > 0 ? monthlyPaymentsAgg[0].total : 0;
+    const todayRevenue = todayPaymentsAgg.length > 0 ? todayPaymentsAgg[0].total : 0;
 
-      totalRevenue += planPrice;
-      monthlyRevenue += planPrice;
+    // Total Pending Dues Across Hotels
+    const pendingDuesSummary = await Booking.aggregate([
+      { $match: { dueAmount: { $gt: 0 }, status: { $ne: 'CANCELLED' }, isDeleted: { $ne: true } } },
+      { $group: { _id: null, totalDue: { $sum: '$dueAmount' } } },
+    ]);
+    const pendingPayments = pendingDuesSummary.length > 0 ? pendingDuesSummary[0].totalDue : 0;
 
-      const startDate = h.subscription?.subscriptionStartDate ? new Date(h.subscription.subscriptionStartDate) : null;
-      if (startDate && startDate >= startOfToday) {
-        todayRevenue += planPrice;
-      }
+    // Active Subscriptions
+    const activeSubscriptions = await Hotel.countDocuments({
+      isDeleted: false,
+      'subscription.status': 'ACTIVE',
     });
 
     const recentPending = await Hotel.find({ status: 'PENDING_APPROVAL', isDeleted: false })
@@ -85,11 +108,16 @@ export const getSuperAdminDashboard = async (req: AuthenticatedRequest, res: Res
         disabledHotels,
         expiredHotels,
         trialHotels,
-        paidHotels,
+        activeSubscriptions,
+        totalGuests,
+        totalBookings,
+        todayCheckIns,
+        todayCheckOuts,
         totalRevenue,
+        weeklyRevenue,
         monthlyRevenue,
         todayRevenue,
-        totalOrders,
+        pendingPayments,
         recentPending,
       },
     });
@@ -143,12 +171,30 @@ export const getHotelDetails = async (req: AuthenticatedRequest, res: Response):
       return;
     }
 
-    const staff = await User.find({ hotel: hotel._id }).select('-password');
+    const [staff, totalRooms, totalBookings, totalGuests, paymentsAgg] = await Promise.all([
+      User.find({ hotel: hotel._id }).select('-password'),
+      mongoose.model('Room').countDocuments({ hotel: hotel._id, isDeleted: { $ne: true } }),
+      Booking.countDocuments({ hotel: hotel._id, isDeleted: { $ne: true } }),
+      Guest.countDocuments({ hotel: hotel._id, isDeleted: { $ne: true } }),
+      Payment.aggregate([
+        { $match: { hotel: hotel._id, paymentStatus: 'PAID' } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]),
+    ]);
+
+    const totalRevenue = paymentsAgg.length > 0 ? paymentsAgg[0].total : 0;
+
     res.status(200).json({
       success: true,
       data: {
         hotel,
         staff,
+        stats: {
+          totalRooms,
+          totalBookings,
+          totalGuests,
+          totalRevenue,
+        },
       },
     });
   } catch (error: any) {

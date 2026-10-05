@@ -8,6 +8,7 @@ import {
   addBookingCharge,
   processCheckOut,
   getGuestsList,
+  getGuestDetailsById,
   deleteGuest,
   getBookingsList,
   lookupGuest,
@@ -53,6 +54,7 @@ router.put('/rooms/:id/status', updateRoomStatus);
 // Guests & ID Proof Verification
 router.get('/guests/lookup', lookupGuest);
 router.get('/guests', getGuestsList);
+router.get('/guests/:id', getGuestDetailsById);
 router.post('/guests', registerGuest);
 router.delete('/guests/:id', deleteGuest);
 router.put('/guests/:id/verify-id', verifyGuestId);

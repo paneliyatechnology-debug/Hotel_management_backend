@@ -8,11 +8,11 @@ import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import sendEmail from '../utils/sendEmail';
 import { passwordResetOtpTemplate } from '../utils/emailTemplates';
 
-// Access Token Generator (Short-lived: 1 Hour)
+// Access Token Generator (Extended: 7 Days for Uninterrupted Operations)
 export const generateAccessToken = (id: string, role: string): string => {
   const secret = process.env.JWT_SECRET || 'super_hotel_jwt_secret_key_2026_modern_secure';
   return jwt.sign({ id, role, tokenType: 'ACCESS' }, secret, {
-    expiresIn: '1h',
+    expiresIn: '7d',
   });
 };
 

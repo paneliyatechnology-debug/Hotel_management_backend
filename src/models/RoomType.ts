@@ -13,6 +13,11 @@ export interface IRoomType extends Document {
   bedType?: string;
   amenities: string[];
   images: string[];
+  gstEnabled?: boolean;
+  gstRate?: number;
+  cgstRate?: number;
+  sgstRate?: number;
+  taxInclusive?: boolean;
   isActive: boolean;
   isDeleted: boolean;
   createdAt: Date;
@@ -33,6 +38,11 @@ const roomTypeSchema = new Schema<IRoomType>(
     bedType: { type: String, default: '1 King Bed' },
     amenities: { type: [String], default: ['Free WiFi', 'LED TV', 'Mini Fridge', 'Attached Bathroom'] },
     images: { type: [String], default: [] },
+    gstEnabled: { type: Boolean, default: true },
+    gstRate: { type: Number, default: 18 },
+    cgstRate: { type: Number, default: 9 },
+    sgstRate: { type: Number, default: 9 },
+    taxInclusive: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
     isDeleted: { type: Boolean, default: false, index: true },
   },

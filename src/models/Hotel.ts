@@ -47,6 +47,12 @@ export interface IHotel extends Document {
     timezone: string;
     currency: string;
     taxPercentage: number;
+    gstEnabled?: boolean;
+    gstin?: string;
+    defaultGstRate?: number;
+    defaultCgstRate?: number;
+    defaultSgstRate?: number;
+    taxInclusive?: boolean;
     upiId?: string;
     bankDetails?: {
       bankName?: string;
@@ -54,6 +60,7 @@ export interface IHotel extends Document {
       ifscCode?: string;
       beneficiaryName?: string;
     };
+    lateCheckoutGraceMinutes?: number;
     amenities: string[];
     policies: string[];
   };
@@ -118,7 +125,13 @@ const hotelSchema = new Schema<IHotel>(
       checkOutTime: { type: String, default: '12:00' },
       timezone: { type: String, default: 'Asia/Kolkata' },
       currency: { type: String, default: 'INR' },
-      taxPercentage: { type: Number, default: 0 },
+      taxPercentage: { type: Number, default: 18 },
+      gstEnabled: { type: Boolean, default: true },
+      gstin: { type: String, default: '' },
+      defaultGstRate: { type: Number, default: 18 },
+      defaultCgstRate: { type: Number, default: 9 },
+      defaultSgstRate: { type: Number, default: 9 },
+      taxInclusive: { type: Boolean, default: false },
       upiId: { type: String, default: 'jatinkakadiya234-1@okicici' },
       bankDetails: {
         bankName: { type: String, default: '' },
@@ -126,6 +139,7 @@ const hotelSchema = new Schema<IHotel>(
         ifscCode: { type: String, default: '' },
         beneficiaryName: { type: String, default: '' },
       },
+      lateCheckoutGraceMinutes: { type: Number, default: 10, min: 0, max: 60 },
       amenities: { type: [String], default: ['Free WiFi', '24/7 Room Service', 'Air Conditioning'] },
       policies: { type: [String], default: ['Valid Government ID required at check-in', 'No smoking in standard rooms'] },
     },

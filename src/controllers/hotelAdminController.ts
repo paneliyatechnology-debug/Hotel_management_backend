@@ -18,6 +18,8 @@ import { computeSubscriptionMetrics } from './authController';
 import { emitToHotel } from '../utils/socketService';
 import { checkEmailExistsGlobally } from '../utils/emailValidator';
 
+import BookingCharge from '../models/BookingCharge';
+
 // @desc    Hotel Admin Dashboard KPI Summary
 // @route   GET /api/v1/admin/dashboard
 export const getHotelAdminDashboard = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -30,12 +32,12 @@ export const getHotelAdminDashboard = async (req: AuthenticatedRequest, res: Res
     const hotelObjId = new mongoose.Types.ObjectId(hotelId.toString());
 
     // Room Status Counts
-    const availableRooms = await Room.countDocuments({ hotel: hotelId, status: 'AVAILABLE', isActive: true });
-    const occupiedRooms = await Room.countDocuments({ hotel: hotelId, status: 'OCCUPIED', isActive: true });
-    const reservedRooms = await Room.countDocuments({ hotel: hotelId, status: 'RESERVED', isActive: true });
-    const cleaningRooms = await Room.countDocuments({ hotel: hotelId, status: 'CLEANING', isActive: true });
-    const maintenanceRooms = await Room.countDocuments({ hotel: hotelId, status: 'MAINTENANCE', isActive: true });
-    const totalRooms = await Room.countDocuments({ hotel: hotelId, isActive: true });
+    const availableRooms = await Room.countDocuments({ hotel: hotelId, status: 'AVAILABLE', isActive: true, isDeleted: { $ne: true } });
+    const occupiedRooms = await Room.countDocuments({ hotel: hotelId, status: 'OCCUPIED', isActive: true, isDeleted: { $ne: true } });
+    const reservedRooms = await Room.countDocuments({ hotel: hotelId, status: 'RESERVED', isActive: true, isDeleted: { $ne: true } });
+    const cleaningRooms = await Room.countDocuments({ hotel: hotelId, status: 'CLEANING', isActive: true, isDeleted: { $ne: true } });
+    const maintenanceRooms = await Room.countDocuments({ hotel: hotelId, status: 'MAINTENANCE', isActive: true, isDeleted: { $ne: true } });
+    const totalRooms = await Room.countDocuments({ hotel: hotelId, isActive: true, isDeleted: { $ne: true } });
 
     // Today's Start & End
     const startOfToday = new Date();
@@ -46,17 +48,26 @@ export const getHotelAdminDashboard = async (req: AuthenticatedRequest, res: Res
     // Today Check-ins & Check-outs
     const todayCheckIns = await Booking.countDocuments({
       hotel: hotelId,
+      isDeleted: { $ne: true },
       checkInDate: { $gte: startOfToday, $lte: endOfToday },
     });
     const todayCheckOuts = await Booking.countDocuments({
       hotel: hotelId,
+      isDeleted: { $ne: true },
       checkOutDate: { $gte: startOfToday, $lte: endOfToday },
     });
 
-    // Active Guests Currently Staying
+    // Active In-House Guests
     const currentGuests = await Booking.countDocuments({
       hotel: hotelId,
       status: 'CHECKED_IN',
+      isDeleted: { $ne: true },
+    });
+
+    // Total Bookings
+    const totalBookings = await Booking.countDocuments({
+      hotel: hotelId,
+      isDeleted: { $ne: true },
     });
 
     // Revenue Metrics - Today
@@ -82,6 +93,41 @@ export const getHotelAdminDashboard = async (req: AuthenticatedRequest, res: Res
       ? Math.round(((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100)
       : todayRevenue > 0 ? 100 : 0;
 
+    // Week's Start (Monday 00:00)
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const diffToMonday = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+    const mondayDate = new Date(now);
+    mondayDate.setDate(diffToMonday);
+    mondayDate.setHours(0, 0, 0, 0);
+
+    const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const weeklyRevenueBreakdown: any[] = [];
+    let weekRevenue = 0;
+
+    for (let i = 0; i < 7; i++) {
+      const dayStart = new Date(mondayDate);
+      dayStart.setDate(mondayDate.getDate() + i);
+      dayStart.setHours(0, 0, 0, 0);
+
+      const dayEnd = new Date(dayStart);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      const dayPayments = await Payment.aggregate([
+        { $match: { hotel: hotelObjId, paymentStatus: 'PAID', createdAt: { $gte: dayStart, $lte: dayEnd } } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]);
+      const amount = dayPayments.length > 0 ? dayPayments[0].total : 0;
+      weekRevenue += amount;
+
+      weeklyRevenueBreakdown.push({
+        day: weekDays[i],
+        date: dayStart.toISOString().split('T')[0],
+        formattedDate: dayStart.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+        amount,
+      });
+    }
+
     // Month's Start
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const monthlyPayments = await Payment.aggregate([
@@ -92,15 +138,55 @@ export const getHotelAdminDashboard = async (req: AuthenticatedRequest, res: Res
 
     // Total Pending Dues
     const pendingDuesSummary = await Booking.aggregate([
-      { $match: { hotel: hotelObjId, dueAmount: { $gt: 0 }, status: { $ne: 'CANCELLED' } } },
+      { $match: { hotel: hotelObjId, dueAmount: { $gt: 0 }, status: { $ne: 'CANCELLED' }, isDeleted: { $ne: true } } },
       { $group: { _id: null, totalDue: { $sum: '$dueAmount' } } },
     ]);
     const pendingPayments = pendingDuesSummary.length > 0 ? pendingDuesSummary[0].totalDue : 0;
 
+    // Revenue Source Breakdown (Actual Database Aggregations)
+    const roomBookingPayments = await Payment.aggregate([
+      {
+        $match: {
+          hotel: hotelObjId,
+          paymentStatus: 'PAID',
+          paymentType: { $in: ['ADVANCE', 'PARTIAL', 'FULL_SETTLEMENT'] },
+        },
+      },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
+    const roomBookingRev = roomBookingPayments.length > 0 ? roomBookingPayments[0].total : 0;
+
+    const extraChargesAgg = await BookingCharge.aggregate([
+      { $match: { hotel: hotelObjId, type: { $in: ['EXTRA_BED', 'EXTRA_GUEST', 'MINI_BAR', 'DAMAGE'] } } },
+      { $group: { _id: null, total: { $sum: '$totalAmount' } } },
+    ]);
+    const extraServicesRev = extraChargesAgg.length > 0 ? extraChargesAgg[0].total : 0;
+
+    const foodChargesAgg = await BookingCharge.aggregate([
+      { $match: { hotel: hotelObjId, type: { $in: ['ROOM_SERVICE', 'LAUNDRY'] } } },
+      { $group: { _id: null, total: { $sum: '$totalAmount' } } },
+    ]);
+    const foodRestaurantRev = foodChargesAgg.length > 0 ? foodChargesAgg[0].total : 0;
+
+    const otherPayments = await Payment.aggregate([
+      {
+        $match: {
+          hotel: hotelObjId,
+          paymentStatus: 'PAID',
+          paymentType: 'EXTRA_CHARGE',
+        },
+      },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
+    const otherChargesRev = otherPayments.length > 0 ? otherPayments[0].total : 0;
+    const totalRevenueAllSources = roomBookingRev + extraServicesRev + foodRestaurantRev + otherChargesRev;
+
     // Recent 5 Bookings
-    const recentBookings = await Booking.find({ hotel: hotelId })
-      .populate('guest', 'fullName mobileNumber')
-      .populate('room', 'roomNumber')
+    const recentBookings = await Booking.find({ hotel: hotelId, isDeleted: { $ne: true } })
+      .populate('guest', 'fullName mobileNumber email')
+      .populate('room', 'roomNumber customPricePerNight')
+      .populate('rooms', 'roomNumber customPricePerNight')
+      .populate('roomType', 'name')
       .sort({ createdAt: -1 })
       .limit(5);
 
@@ -120,14 +206,29 @@ export const getHotelAdminDashboard = async (req: AuthenticatedRequest, res: Res
           todayCheckIns,
           todayCheckOuts,
           currentGuests,
+          totalBookings,
         },
         financials: {
           todayRevenue,
+          weekRevenue,
+          weeklyRevenue: weekRevenue,
+          monthlyRevenue,
           todayEarnings,
           yesterdayRevenue,
           dayGrowthRate,
-          monthlyRevenue,
           pendingPayments,
+          totalRevenue: totalRevenueAllSources,
+        },
+        weeklyRevenue: {
+          breakdown: weeklyRevenueBreakdown,
+          totalThisWeek: weekRevenue,
+        },
+        revenueBreakdown: {
+          roomBooking: roomBookingRev,
+          extraServices: extraServicesRev,
+          foodRestaurant: foodRestaurantRev,
+          otherCharges: otherChargesRev,
+          totalRevenue: totalRevenueAllSources,
         },
         recentBookings,
         subscription: computeSubscriptionMetrics(req.hotel) || req.hotel?.subscription,
@@ -135,6 +236,199 @@ export const getHotelAdminDashboard = async (req: AuthenticatedRequest, res: Res
           phone: '+91 98765 43210',
           email: 'support@cloudhotelier.com',
           whatsapp: '+919876543210',
+        },
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get Detailed Revenue & Filterable Transaction Table
+// @route   GET /api/v1/admin/revenue-details
+export const getRevenueDetails = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const hotelId = req.hotelId || req.user?.hotel;
+    if (!hotelId) {
+      res.status(400).json({ success: false, message: 'Hotel context missing' });
+      return;
+    }
+    const hotelObjId = new mongoose.Types.ObjectId(hotelId.toString());
+
+    const { filter = 'THIS_WEEK', startDate, endDate, search, paymentMethod, room, status, page = 1, limit = 20 } = req.query;
+
+    let rangeStart = new Date();
+    let rangeEnd = new Date();
+    rangeEnd.setHours(23, 59, 59, 999);
+
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const diffToMonday = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+
+    if (filter === 'TODAY') {
+      rangeStart.setHours(0, 0, 0, 0);
+    } else if (filter === 'THIS_WEEK') {
+      const mon = new Date(now);
+      mon.setDate(diffToMonday);
+      mon.setHours(0, 0, 0, 0);
+      rangeStart = mon;
+    } else if (filter === 'LAST_WEEK') {
+      const lastMon = new Date(now);
+      lastMon.setDate(diffToMonday - 7);
+      lastMon.setHours(0, 0, 0, 0);
+      rangeStart = lastMon;
+
+      const lastSun = new Date(lastMon);
+      lastSun.setDate(lastMon.getDate() + 6);
+      lastSun.setHours(23, 59, 59, 999);
+      rangeEnd = lastSun;
+    } else if (filter === 'THIS_MONTH') {
+      rangeStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    } else if (filter === 'LAST_MONTH') {
+      rangeStart = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+      rangeEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    } else if (filter === 'CUSTOM' && startDate && endDate) {
+      rangeStart = new Date(startDate.toString());
+      rangeStart.setHours(0, 0, 0, 0);
+      rangeEnd = new Date(endDate.toString());
+      rangeEnd.setHours(23, 59, 59, 999);
+    } else {
+      const mon = new Date(now);
+      mon.setDate(diffToMonday);
+      mon.setHours(0, 0, 0, 0);
+      rangeStart = mon;
+    }
+
+    const matchQuery: any = {
+      hotel: hotelObjId,
+      createdAt: { $gte: rangeStart, $lte: rangeEnd },
+    };
+
+    if (status && status !== 'ALL') {
+      matchQuery.paymentStatus = status;
+    } else if (!status) {
+      matchQuery.paymentStatus = 'PAID';
+    }
+    if (paymentMethod && paymentMethod !== 'ALL') {
+      matchQuery.paymentMethod = paymentMethod;
+    }
+
+    const payments = await Payment.find(matchQuery)
+      .populate('guest', 'fullName mobileNumber email')
+      .populate({
+        path: 'booking',
+        populate: [
+          { path: 'room', select: 'roomNumber customPricePerNight pricePerNight' },
+          { path: 'rooms', select: 'roomNumber customPricePerNight pricePerNight' },
+          { path: 'roomType', select: 'name' },
+        ],
+      })
+      .sort({ createdAt: -1 });
+
+    let formattedTransactions = payments.map((p: any) => {
+      const g = p.guest || {};
+      const b = p.booking || {};
+      const rList = Array.isArray(b.rooms) && b.rooms.length > 0 ? b.rooms : b.room ? [b.room] : [];
+      const roomNum = rList.map((rm: any) => rm.roomNumber).join(', ') || b.roomNumber || 'Room N/A';
+      const rType = b.roomType?.name || 'Standard Room';
+
+      let desc = 'Room Booking';
+      if (p.paymentType === 'ADVANCE') desc = 'Advance Booking Deposit';
+      else if (p.paymentType === 'EXTRA_CHARGE') desc = 'Extra Services / Food Charge';
+      else if (p.paymentType === 'PARTIAL') desc = 'Part Payment';
+      else if (p.paymentType === 'FULL_SETTLEMENT') desc = 'Full Settlement';
+      if (p.note) desc += ` (${p.note})`;
+
+      const taxPortion = b.taxAmount && b.totalAmount ? Math.round((p.amount / b.totalAmount) * b.taxAmount) : 0;
+      const basePortion = Math.max(0, p.amount - taxPortion);
+
+      return {
+        id: p._id,
+        transactionId: p.transactionId || p.receiptNumber,
+        receiptNumber: p.receiptNumber,
+        date: p.createdAt,
+        formattedDate: new Date(p.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+        guestName: g.fullName || 'Guest',
+        guestMobile: g.mobileNumber || 'N/A',
+        guestEmail: g.email || '',
+        bookingNumber: b.bookingNumber || 'N/A',
+        bookingId: b._id,
+        roomNumber: roomNum,
+        roomType: rType,
+        description: desc,
+        paymentMethod: p.paymentMethod || 'UPI',
+        amount: basePortion,
+        tax: taxPortion,
+        total: p.amount,
+        status: p.paymentStatus || 'PAID',
+      };
+    });
+
+    const searchStr = typeof search === 'string' ? search.trim().toLowerCase() : '';
+    if (searchStr) {
+      formattedTransactions = formattedTransactions.filter((t) =>
+        t.guestName.toLowerCase().includes(searchStr) ||
+        t.guestMobile.toLowerCase().includes(searchStr) ||
+        t.transactionId.toLowerCase().includes(searchStr) ||
+        t.bookingNumber.toLowerCase().includes(searchStr) ||
+        t.roomNumber.toLowerCase().includes(searchStr)
+      );
+    }
+
+    if (room && room !== 'ALL') {
+      const rStr = String(room);
+      formattedTransactions = formattedTransactions.filter((t) => t.roomNumber.includes(rStr));
+    }
+
+    const totalRevenue = formattedTransactions.reduce((acc, t) => acc + (t.status === 'PAID' ? t.total : 0), 0);
+    const totalTransactions = formattedTransactions.length;
+
+    let roomBookingRev = 0;
+    let extraServicesRev = 0;
+    let foodRestaurantRev = 0;
+    let otherChargesRev = 0;
+
+    formattedTransactions.forEach((t) => {
+      const d = t.description.toLowerCase();
+      if (d.includes('extra') || d.includes('service') || d.includes('bed')) {
+        extraServicesRev += t.total;
+      } else if (d.includes('food') || d.includes('restaurant') || d.includes('dining')) {
+        foodRestaurantRev += t.total;
+      } else if (d.includes('other') || d.includes('laundry')) {
+        otherChargesRev += t.total;
+      } else {
+        roomBookingRev += t.total;
+      }
+    });
+
+    const pageNum = Math.max(1, Number(page));
+    const limitNum = Math.max(1, Number(limit));
+    const totalItems = formattedTransactions.length;
+    const paginatedTransactions = formattedTransactions.slice((pageNum - 1) * limitNum, pageNum * limitNum);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        dateRange: {
+          startDate: rangeStart.toISOString().split('T')[0],
+          endDate: rangeEnd.toISOString().split('T')[0],
+          label: `${rangeStart.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} - ${rangeEnd.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`,
+        },
+        totalRevenue,
+        totalTransactions,
+        revenueBreakdown: {
+          roomBooking: roomBookingRev,
+          extraServices: extraServicesRev,
+          foodRestaurant: foodRestaurantRev,
+          otherCharges: otherChargesRev,
+          total: totalRevenue,
+        },
+        transactions: paginatedTransactions,
+        pagination: {
+          total: totalItems,
+          page: pageNum,
+          limit: limitNum,
+          totalPages: Math.ceil(totalItems / limitNum) || 1,
         },
       },
     });
@@ -178,7 +472,7 @@ export const getHotelProfile = async (req: AuthenticatedRequest, res: Response):
 
 export const createRoomType = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { name, description, basePrice, capacity, bedCount, bedType, amenities, images } = req.body;
+    const { name, description, basePrice, capacity, bedCount, bedType, amenities, images, gstEnabled, gstRate, taxInclusive } = req.body;
     if (!name || !name.trim()) {
       res.status(400).json({ success: false, message: 'Room category name is required.' });
       return;
@@ -199,6 +493,7 @@ export const createRoomType = async (req: AuthenticatedRequest, res: Response): 
       return;
     }
 
+    const rateVal = gstRate !== undefined && gstRate !== null ? Number(gstRate) : 18;
     const roomType = await RoomType.create({
       hotel: req.hotelId,
       name: trimmedName,
@@ -209,6 +504,11 @@ export const createRoomType = async (req: AuthenticatedRequest, res: Response): 
       bedType: bedType || '1 King Bed',
       amenities: amenities || [],
       images: images || [],
+      gstEnabled: gstEnabled !== undefined ? Boolean(gstEnabled) : true,
+      gstRate: rateVal,
+      cgstRate: rateVal / 2,
+      sgstRate: rateVal / 2,
+      taxInclusive: taxInclusive !== undefined ? Boolean(taxInclusive) : false,
       isActive: true,
       isDeleted: false,
     });
@@ -223,7 +523,7 @@ export const createRoomType = async (req: AuthenticatedRequest, res: Response): 
 
 export const updateRoomType = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { name, description, basePrice, capacity, bedCount, bedType, amenities, images, isActive } = req.body;
+    const { name, description, basePrice, capacity, bedCount, bedType, amenities, images, isActive, gstEnabled, gstRate, taxInclusive } = req.body;
     const roomType = await RoomType.findOne({ _id: req.params.id, hotel: req.hotelId, isDeleted: { $ne: true } });
     if (!roomType) {
       res.status(404).json({ success: false, message: 'Room category not found.' });
@@ -258,6 +558,14 @@ export const updateRoomType = async (req: AuthenticatedRequest, res: Response): 
     if (bedType !== undefined) roomType.bedType = bedType;
     if (amenities !== undefined) roomType.amenities = Array.isArray(amenities) ? amenities : [];
     if (images !== undefined) roomType.images = images;
+    if (gstEnabled !== undefined) roomType.gstEnabled = Boolean(gstEnabled);
+    if (gstRate !== undefined) {
+      const r = Number(gstRate);
+      roomType.gstRate = r;
+      roomType.cgstRate = r / 2;
+      roomType.sgstRate = r / 2;
+    }
+    if (taxInclusive !== undefined) roomType.taxInclusive = Boolean(taxInclusive);
     if (isActive !== undefined) roomType.isActive = Boolean(isActive);
 
     await roomType.save();
@@ -304,7 +612,7 @@ export const getRooms = async (req: AuthenticatedRequest, res: Response): Promis
 
 export const createRoom = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { roomNumber, roomType, floor, seatingCapacity, bedCount, bedType, customPricePerNight, notes, amenities, status } = req.body;
+    const { roomNumber, roomType, floor, seatingCapacity, bedCount, bedType, customPricePerNight, notes, amenities, status, gstEnabled, gstRate, taxInclusive } = req.body;
     if (!roomNumber || !roomType) {
       res.status(400).json({ success: false, message: 'Room number and room category are required.' });
       return;
@@ -340,6 +648,8 @@ export const createRoom = async (req: AuthenticatedRequest, res: Response): Prom
       return;
     }
 
+    const rateVal = gstRate !== undefined && gstRate !== null ? Number(gstRate) : undefined;
+
     let room;
     if (existingRoom && existingRoom.isDeleted) {
       existingRoom.roomType = roomType;
@@ -351,6 +661,13 @@ export const createRoom = async (req: AuthenticatedRequest, res: Response): Prom
       existingRoom.customPricePerNight = customPricePerNight ? Number(customPricePerNight) : undefined;
       existingRoom.notes = notes || '';
       existingRoom.amenities = Array.isArray(amenities) ? amenities : [];
+      if (gstEnabled !== undefined) existingRoom.gstEnabled = Boolean(gstEnabled);
+      if (rateVal !== undefined) {
+        existingRoom.gstRate = rateVal;
+        existingRoom.cgstRate = rateVal / 2;
+        existingRoom.sgstRate = rateVal / 2;
+      }
+      if (taxInclusive !== undefined) existingRoom.taxInclusive = Boolean(taxInclusive);
       existingRoom.isActive = true;
       existingRoom.isDeleted = false;
       await existingRoom.save();
@@ -368,6 +685,11 @@ export const createRoom = async (req: AuthenticatedRequest, res: Response): Prom
         customPricePerNight: customPricePerNight ? Number(customPricePerNight) : undefined,
         notes: notes || '',
         amenities: Array.isArray(amenities) ? amenities : [],
+        gstEnabled: gstEnabled !== undefined ? Boolean(gstEnabled) : undefined,
+        gstRate: rateVal,
+        cgstRate: rateVal !== undefined ? rateVal / 2 : undefined,
+        sgstRate: rateVal !== undefined ? rateVal / 2 : undefined,
+        taxInclusive: taxInclusive !== undefined ? Boolean(taxInclusive) : undefined,
         isActive: true,
         isDeleted: false,
       });
@@ -395,7 +717,7 @@ export const createRoom = async (req: AuthenticatedRequest, res: Response): Prom
 
 export const updateRoom = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { roomNumber, roomType, floor, seatingCapacity, bedCount, bedType, customPricePerNight, notes, amenities, status } = req.body;
+    const { roomNumber, roomType, floor, seatingCapacity, bedCount, bedType, customPricePerNight, notes, amenities, status, gstEnabled, gstRate, taxInclusive } = req.body;
     const room = await Room.findOne({ _id: req.params.id, hotel: req.hotelId, isDeleted: { $ne: true } });
     if (!room) {
       res.status(404).json({ success: false, message: 'Room not found.' });
@@ -430,6 +752,14 @@ export const updateRoom = async (req: AuthenticatedRequest, res: Response): Prom
     if (notes !== undefined) room.notes = notes;
     if (amenities !== undefined) room.amenities = Array.isArray(amenities) ? amenities : [];
     if (status) room.status = status;
+    if (gstEnabled !== undefined) room.gstEnabled = Boolean(gstEnabled);
+    if (gstRate !== undefined && gstRate !== null) {
+      const r = Number(gstRate);
+      room.gstRate = r;
+      room.cgstRate = r / 2;
+      room.sgstRate = r / 2;
+    }
+    if (taxInclusive !== undefined) room.taxInclusive = Boolean(taxInclusive);
 
     await room.save();
     const populatedRoom = await Room.findById(room._id).populate('roomType');
@@ -475,6 +805,21 @@ export const updateRoomStatus = async (req: AuthenticatedRequest, res: Response)
     if (status === 'CLEANING') {
       room.cleaningStartedAt = new Date();
       room.cleaningDurationMinutes = Number(cleaningDurationMinutes) || 15;
+    }
+
+    if (oldStatus === 'OCCUPIED' && (status === 'CLEANING' || status === 'AVAILABLE')) {
+      const activeBooking = await Booking.findOne({
+        hotel: req.hotelId,
+        $or: [{ room: room._id }, { rooms: room._id }, { roomNumber: String(room.roomNumber) }],
+        status: { $in: ['CHECKED_IN', 'IN-HOUSE'] },
+        isDeleted: { $ne: true },
+      });
+      if (activeBooking) {
+        activeBooking.status = 'CHECKED_OUT';
+        activeBooking.actualCheckOut = new Date();
+        await activeBooking.save();
+        emitToHotel(req.hotelId, 'BOOKING_UPDATED', { bookingId: activeBooking._id, status: 'CHECKED_OUT' });
+      }
     }
 
     await room.save();
@@ -553,6 +898,14 @@ export const createReceptionist = async (req: AuthenticatedRequest, res: Respons
       return;
     }
 
+    if (phone) {
+      const cleanPhone = phone.toString().replace(/\D/g, '');
+      if (cleanPhone.length !== 10) {
+        res.status(400).json({ success: false, message: 'Phone number must contain exactly 10 numeric digits.' });
+        return;
+      }
+    }
+
     const isEmailUsed = await checkEmailExistsGlobally(email);
     if (isEmailUsed) {
       res.status(400).json({ success: false, message: 'This email is already registered in the system (either as a user, guest, or another hotel owner).' });
@@ -577,10 +930,11 @@ export const createReceptionist = async (req: AuthenticatedRequest, res: Respons
 
     const rawTempPassword = assignedRole.slice(0, 4) + '@' + crypto.randomBytes(4).toString('hex') + '#26';
 
+    const cleanPhone = phone ? phone.toString().replace(/\D/g, '') : '';
     const staffMember = await User.create({
       name,
       email: email.toLowerCase(),
-      phone: phone || '',
+      phone: cleanPhone,
       employeeId: employeeId || `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
       password: rawTempPassword,
       role: assignedRole,
@@ -646,7 +1000,14 @@ export const updateReceptionist = async (req: AuthenticatedRequest, res: Respons
     }
 
     if (name) staff.name = name;
-    if (phone !== undefined) staff.phone = phone;
+    if (phone !== undefined) {
+      const cleanPhone = phone ? phone.toString().replace(/\D/g, '') : '';
+      if (cleanPhone && cleanPhone.length !== 10) {
+        res.status(400).json({ success: false, message: 'Phone number must contain exactly 10 numeric digits.' });
+        return;
+      }
+      staff.phone = cleanPhone;
+    }
     if (email && email.toLowerCase() !== staff.email) {
       const isEmailUsed = await checkEmailExistsGlobally(email, staff._id.toString(), 'User');
       if (isEmailUsed) {

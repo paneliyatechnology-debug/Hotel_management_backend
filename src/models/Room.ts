@@ -16,6 +16,11 @@ export interface IRoom extends Document {
   amenities?: string[];
   cleaningStartedAt?: Date;
   cleaningDurationMinutes?: number;
+  gstEnabled?: boolean;
+  gstRate?: number;
+  cgstRate?: number;
+  sgstRate?: number;
+  taxInclusive?: boolean;
   isActive: boolean;
   isDeleted: boolean;
   createdAt: Date;
@@ -42,6 +47,11 @@ const roomSchema = new Schema<IRoom>(
     amenities: { type: [String], default: [] },
     cleaningStartedAt: { type: Date },
     cleaningDurationMinutes: { type: Number, default: 15 },
+    gstEnabled: { type: Boolean, default: true },
+    gstRate: { type: Number, default: 18 },
+    cgstRate: { type: Number, default: 9 },
+    sgstRate: { type: Number, default: 9 },
+    taxInclusive: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
     isDeleted: { type: Boolean, default: false, index: true },
   },

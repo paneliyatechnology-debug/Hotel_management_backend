@@ -1,6 +1,7 @@
 import express, { Router } from 'express';
 import {
   getHotelAdminDashboard,
+  getRevenueDetails,
   getRoomTypes,
   createRoomType,
   updateRoomType,
@@ -21,7 +22,7 @@ import {
   getDailyCollectionsReconciliation,
   settleCashDrawerHandover,
 } from '../controllers/hotelAdminController';
-import { getPaymentsLedger, recordDirectPayment } from '../controllers/receptionistController';
+import { getPaymentsLedger, recordDirectPayment, getGuestsList, getGuestDetailsById } from '../controllers/receptionistController';
 import {
   authenticateUser,
   requireRole,
@@ -31,15 +32,18 @@ import {
 
 const router: Router = express.Router();
 
-// Hotel Admin & Receptionist operational access
+// Hotel Admin operational access
 router.use(
   authenticateUser,
-  requireRole('HOTEL_ADMIN', 'RECEPTIONIST'),
+  requireRole('HOTEL_ADMIN'),
   requireActiveHotel,
   requireActiveSubscription
 );
 
-router.get('/dashboard', requireRole('HOTEL_ADMIN'), getHotelAdminDashboard);
+router.get('/dashboard', getHotelAdminDashboard);
+router.get('/revenue-details', getRevenueDetails);
+router.get('/guests', getGuestsList);
+router.get('/guests/:id', getGuestDetailsById);
 
 // Room Types & Rooms
 router.get('/room-types', getRoomTypes);
@@ -52,12 +56,12 @@ router.put('/rooms/:id', updateRoom);
 router.delete('/rooms/:id', deleteRoom);
 router.put('/rooms/:id/status', updateRoomStatus);
 
-// Staff / Receptionists (Admin only)
-router.get('/receptionists', requireRole('HOTEL_ADMIN'), getReceptionists);
-router.post('/receptionists', requireRole('HOTEL_ADMIN'), createReceptionist);
-router.put('/receptionists/:id', requireRole('HOTEL_ADMIN'), updateReceptionist);
-router.delete('/receptionists/:id', requireRole('HOTEL_ADMIN'), deleteReceptionist);
-router.put('/receptionists/:id/status', requireRole('HOTEL_ADMIN'), updateReceptionistStatus);
+// Staff / Receptionists
+router.get('/receptionists', getReceptionists);
+router.post('/receptionists', createReceptionist);
+router.put('/receptionists/:id', updateReceptionist);
+router.delete('/receptionists/:id', deleteReceptionist);
+router.put('/receptionists/:id/status', updateReceptionistStatus);
 
 // Payments & Financial Ledger
 router.get('/payments', getPaymentsLedger);
@@ -67,10 +71,10 @@ router.post('/payments', recordDirectPayment);
 router.get('/daily-collections', getDailyCollectionsReconciliation);
 router.post('/daily-collections/handover', settleCashDrawerHandover);
 
-// Profile & Reports (Admin only)
-router.get('/profile', requireRole('HOTEL_ADMIN'), getHotelProfile);
-router.put('/profile', requireRole('HOTEL_ADMIN'), updateHotelProfile);
-router.get('/reports', requireRole('HOTEL_ADMIN'), getHotelReports);
+// Profile & Reports
+router.get('/profile', getHotelProfile);
+router.put('/profile', updateHotelProfile);
+router.get('/reports', getHotelReports);
 
 export default router;
 

@@ -24,7 +24,7 @@ export interface IBooking extends Document {
     children: number;
   };
   accompanyingGuests?: Array<{
-    name: string;
+    name?: string;
     age?: number;
     gender?: 'Male' | 'Female' | 'Other';
     relationship?: string;
@@ -40,9 +40,26 @@ export interface IBooking extends Document {
   // Financial Breakdown
   baseAmount: number;
   taxAmount: number;
+  gstRate?: number;
+  cgstRate?: number;
+  sgstRate?: number;
+  gstAmount?: number;
+  cgstAmount?: number;
+  sgstAmount?: number;
+  igstAmount?: number;
+  taxableAmount?: number;
+  taxInclusive?: boolean;
+  roomGstBreakdown?: any[];
   discountAmount: number;
   securityDepositAmount?: number;
   extraChargesTotal: number;
+  lateCheckoutCharge?: number;
+  lateCheckoutHours?: number;
+  lateCheckoutMinutes?: number;
+  lateCheckoutType?: 'hourly' | 'full_day' | 'none';
+  hourlyRate?: number;
+  dailyRoomRate?: number;
+  gracePeriodMinutes?: number;
   totalAmount: number;
   paidAmount: number;
   dueAmount: number;
@@ -80,7 +97,7 @@ const bookingSchema = new Schema<IBooking>(
     },
     accompanyingGuests: [
       {
-        name: { type: String, required: true, trim: true },
+        name: { type: String, default: 'Guest Member', trim: true },
         age: { type: Number },
         gender: { type: String, enum: ['Male', 'Female', 'Other'], default: 'Male' },
         relationship: { type: String, default: 'Family' },
@@ -95,9 +112,26 @@ const bookingSchema = new Schema<IBooking>(
     ],
     baseAmount: { type: Number, required: true, min: 0 },
     taxAmount: { type: Number, default: 0, min: 0 },
+    gstRate: { type: Number, default: 18 },
+    cgstRate: { type: Number, default: 9 },
+    sgstRate: { type: Number, default: 9 },
+    gstAmount: { type: Number, default: 0 },
+    cgstAmount: { type: Number, default: 0 },
+    sgstAmount: { type: Number, default: 0 },
+    igstAmount: { type: Number, default: 0 },
+    taxableAmount: { type: Number, default: 0 },
+    taxInclusive: { type: Boolean, default: false },
+    roomGstBreakdown: { type: Array, default: [] },
     discountAmount: { type: Number, default: 0, min: 0 },
     securityDepositAmount: { type: Number, default: 0, min: 0 },
     extraChargesTotal: { type: Number, default: 0, min: 0 },
+    lateCheckoutCharge: { type: Number, default: 0, min: 0 },
+    lateCheckoutHours: { type: Number, default: 0 },
+    lateCheckoutMinutes: { type: Number, default: 0 },
+    lateCheckoutType: { type: String, enum: ['hourly', 'full_day', 'none'], default: 'none' },
+    hourlyRate: { type: Number, default: 0 },
+    dailyRoomRate: { type: Number, default: 0 },
+    gracePeriodMinutes: { type: Number, default: 10 },
     totalAmount: { type: Number, required: true, min: 0 },
     paidAmount: { type: Number, default: 0, min: 0 },
     dueAmount: { type: Number, required: true, min: 0 },
