@@ -48,11 +48,14 @@ export const computeSubscriptionMetrics = (hotel: any) => {
       daysLeft = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
       isTrialActive = diffMs > 0;
       isExpired = !isTrialActive;
-      const start = sub.trialStartDate ? new Date(sub.trialStartDate) : new Date(trialEnd.getTime() - 30 * 86400000);
-      const totalTrialMs = trialEnd.getTime() - start.getTime();
-      totalDays = Math.max(1, Math.round(totalTrialMs / 86400000));
-      elapsedDays = Math.max(0, Math.min(totalDays, totalDays - daysLeft));
-      elapsedPercentage = Math.min(100, Math.max(0, Math.round((elapsedDays / totalDays) * 100)));
+      const start = sub.trialStartDate ? new Date(sub.trialStartDate) : new Date(trialEnd.getTime() - 5 * 86400000);
+      const totalTrialMs = Math.max(86400000, trialEnd.getTime() - start.getTime());
+      totalDays = Number(sub.totalDays) > 0 ? Number(sub.totalDays) : Math.max(1, Math.round(totalTrialMs / (1000 * 60 * 60 * 24)));
+      const diffFromStartMs = Math.max(0, now.getTime() - start.getTime());
+      const rawElapsed = Math.floor(diffFromStartMs / (1000 * 60 * 60 * 24)) + 1;
+      elapsedDays = isExpired ? totalDays : Math.max(1, Math.min(totalDays, rawElapsed));
+      const rawPercentage = Math.round((diffFromStartMs / totalTrialMs) * 100);
+      elapsedPercentage = isExpired ? 100 : Math.min(95, Math.max(1, rawPercentage));
     }
   } else if (sub.status === 'ACTIVE' || subEnd) {
     if (subEnd) {

@@ -19,6 +19,7 @@ import settingsRoutes from './routes/settingsRoutes';
 import uploadRoutes from './routes/uploadRoutes';
 
 import { ensureDefaultPlansExist } from './controllers/subscriptionPlanController';
+import { autoCompleteExpiredCleaningRooms } from './utils/housekeepingService';
 
 // Load environment variables
 dotenv.config();
@@ -26,6 +27,11 @@ dotenv.config();
 // Connect to MongoDB
 connectDB().then(() => {
   ensureDefaultPlansExist().catch((err) => console.error('Error seeding default plans:', err));
+
+  // 🧹 Automatic Housekeeping 100% Turnaround -> AVAILABLE Background Job (Runs every 10 seconds)
+  setInterval(() => {
+    autoCompleteExpiredCleaningRooms().catch((err) => console.error('Housekeeping interval error:', err));
+  }, 10000);
 });
 
 const app = express();

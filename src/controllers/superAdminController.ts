@@ -8,6 +8,7 @@ import Payment from '../models/Payment';
 import SubscriptionPlan from '../models/SubscriptionPlan';
 import Guest from '../models/Guest';
 import Booking from '../models/Booking';
+import Room from '../models/Room';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import sendEmail from '../utils/sendEmail';
 import logAuditAction from '../utils/auditLogger';
@@ -149,12 +150,42 @@ export const getAllHotels = async (req: AuthenticatedRequest, res: Response): Pr
     const total = await Hotel.countDocuments(query);
     const hotels = await Hotel.find(query).sort({ createdAt: -1 }).skip(skip).limit(Number(limit));
 
+    const enrichedHotels = await Promise.all(
+      hotels.map(async (hotel) => {
+        const hObj = hotel.toObject();
+        const [adminUser, realRoomCount, staffCount] = await Promise.all([
+          User.findOne({
+            $or: [
+              { hotel: hotel._id, role: { $in: ['HOTEL_ADMIN', 'HOTEL_OWNER'] } },
+              { email: hotel.ownerEmail.toLowerCase() },
+            ],
+          }).select('name email phone role').lean(),
+          Room.countDocuments({ hotel: hotel._id, isDeleted: { $ne: true } }),
+          User.countDocuments({ hotel: hotel._id }),
+        ]);
+
+        const adminInfo = adminUser
+          ? { name: adminUser.name || hObj.ownerName, email: adminUser.email || hObj.ownerEmail, phone: adminUser.phone || hObj.ownerPhone }
+          : { name: hObj.ownerName, email: hObj.ownerEmail, phone: hObj.ownerPhone };
+
+        return {
+          ...hObj,
+          admin: adminInfo,
+          totalRooms: realRoomCount > 0 ? realRoomCount : (hObj.totalRooms || 0),
+          staffCount: staffCount || 0,
+          phone: hObj.ownerPhone || adminUser?.phone || '',
+          taxId: hObj.gstNumber || hObj.settings?.gstin || hObj.panNumber || 'N/A',
+          code: hObj.slug ? hObj.slug.toUpperCase() : (hObj.name ? hObj.name.slice(0, 3).toUpperCase() : 'PMS'),
+        };
+      })
+    );
+
     res.status(200).json({
       success: true,
       total,
       page: Number(page),
       totalPages: Math.ceil(total / Number(limit)),
-      data: hotels,
+      data: enrichedHotels,
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
@@ -171,29 +202,47 @@ export const getHotelDetails = async (req: AuthenticatedRequest, res: Response):
       return;
     }
 
-    const [staff, totalRooms, totalBookings, totalGuests, paymentsAgg] = await Promise.all([
+    const [staff, totalRooms, totalBookings, totalGuests, paymentsAgg, adminUser] = await Promise.all([
       User.find({ hotel: hotel._id }).select('-password'),
-      mongoose.model('Room').countDocuments({ hotel: hotel._id, isDeleted: { $ne: true } }),
+      Room.countDocuments({ hotel: hotel._id, isDeleted: { $ne: true } }),
       Booking.countDocuments({ hotel: hotel._id, isDeleted: { $ne: true } }),
       Guest.countDocuments({ hotel: hotel._id, isDeleted: { $ne: true } }),
       Payment.aggregate([
         { $match: { hotel: hotel._id, paymentStatus: 'PAID' } },
         { $group: { _id: null, total: { $sum: '$amount' } } },
       ]),
+      User.findOne({
+        $or: [
+          { hotel: hotel._id, role: { $in: ['HOTEL_ADMIN', 'HOTEL_OWNER'] } },
+          { email: hotel.ownerEmail.toLowerCase() },
+        ],
+      }).select('-password'),
     ]);
 
     const totalRevenue = paymentsAgg.length > 0 ? paymentsAgg[0].total : 0;
+    const hObj = hotel.toObject();
 
     res.status(200).json({
       success: true,
       data: {
-        hotel,
+        hotel: {
+          ...hObj,
+          admin: adminUser
+            ? { name: adminUser.name || hObj.ownerName, email: adminUser.email || hObj.ownerEmail, phone: adminUser.phone || hObj.ownerPhone }
+            : { name: hObj.ownerName, email: hObj.ownerEmail, phone: hObj.ownerPhone },
+          totalRooms: totalRooms > 0 ? totalRooms : (hObj.totalRooms || 0),
+          staffCount: staff.length,
+          phone: hObj.ownerPhone || adminUser?.phone || '',
+          taxId: hObj.gstNumber || hObj.settings?.gstin || hObj.panNumber || 'N/A',
+          code: hObj.slug ? hObj.slug.toUpperCase() : (hObj.name ? hObj.name.slice(0, 3).toUpperCase() : 'PMS'),
+        },
         staff,
         stats: {
-          totalRooms,
+          totalRooms: totalRooms > 0 ? totalRooms : (hObj.totalRooms || 0),
           totalBookings,
           totalGuests,
           totalRevenue,
+          staffCount: staff.length,
         },
       },
     });

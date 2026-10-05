@@ -23,20 +23,12 @@ import {
   findOverlappingBookings,
 } from '../utils/bookingAvailability';
 
-// @desc    Helper to auto-resolve rooms whose 15-minute cleaning timer expired
+import { autoCompleteExpiredCleaningRooms } from '../utils/housekeepingService';
+
+// @desc    Helper to auto-resolve rooms whose cleaning timer expired (100% complete)
 export const resolveCleaningRooms = async (hotelId: any): Promise<void> => {
   try {
-    const cleaningRooms = await Room.find({ hotel: hotelId, status: 'CLEANING', isActive: true, isDeleted: { $ne: true } });
-    const now = Date.now();
-    for (const r of cleaningRooms) {
-      const startedAt = r.cleaningStartedAt ? new Date(r.cleaningStartedAt).getTime() : new Date(r.updatedAt).getTime();
-      const durationMs = (r.cleaningDurationMinutes || 15) * 60 * 1000;
-      if (now - startedAt >= durationMs) {
-        r.status = 'AVAILABLE';
-        await r.save();
-        emitToHotel(hotelId, 'ROOM_UPDATED', { roomId: r._id, roomNumber: r.roomNumber, status: 'AVAILABLE' });
-      }
-    }
+    await autoCompleteExpiredCleaningRooms(hotelId);
   } catch (err) {
     console.error('Error auto-resolving cleaning rooms:', err);
   }
@@ -314,12 +306,21 @@ export const registerGuest = async (req: AuthenticatedRequest, res: Response): P
       govtIdNumber,
       frontImage,
       backImage,
+      checkInDate,
+      checkOutDate,
+      status: stayStatus,
+      roomAssigned,
+      roomNumber,
     } = req.body;
 
     const guestFullName = (fullName || name || '').trim();
     const guestMobile = (mobileNumber || phone || '').trim();
     const guestIdNum = (idNumber || govtIdNumber || 'PENDING').trim();
     const cleanIdType = normalizeIdType(idType || govtIdType);
+
+    const checkIn = checkInDate ? new Date(checkInDate) : new Date();
+    const checkOut = checkOutDate ? new Date(checkOutDate) : new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const combinedRoomNumbers = (roomAssigned || roomNumber || '').toString().trim();
 
     if (!guestFullName || !guestMobile) {
       res.status(400).json({
@@ -1409,6 +1410,36 @@ export const getGuestsList = async (req: AuthenticatedRequest, res: Response): P
         }
       }
 
+      const guestDue = Number(activeBooking?.dueAmount ?? 0);
+      const guestPaid = Number(activeBooking?.paidAmount ?? 0);
+      const guestTotal = Number(activeBooking?.totalAmount ?? 0);
+
+      let guestPaymentStatus = 'PENDING';
+      if (activeBooking) {
+        if (activeBooking.paymentStatus) {
+          const rawStatus = String(activeBooking.paymentStatus).toUpperCase();
+          if (rawStatus === 'PAID') guestPaymentStatus = 'PAID';
+          else if (rawStatus === 'PARTIALLY_PAID' || rawStatus === 'PARTIAL') guestPaymentStatus = 'PARTIAL';
+          else if (rawStatus === 'PENDING') {
+            if (guestDue <= 0 && (guestPaid > 0 || guestTotal > 0)) {
+              guestPaymentStatus = 'PAID';
+            } else if (guestPaid > 0) {
+              guestPaymentStatus = 'PARTIAL';
+            } else {
+              guestPaymentStatus = 'PENDING';
+            }
+          } else {
+            guestPaymentStatus = rawStatus;
+          }
+        } else if (guestDue <= 0 && (guestPaid > 0 || guestTotal > 0)) {
+          guestPaymentStatus = 'PAID';
+        } else if (guestPaid > 0) {
+          guestPaymentStatus = 'PARTIAL';
+        } else {
+          guestPaymentStatus = 'PENDING';
+        }
+      }
+
       return {
         ...gObj,
         name: gObj.fullName,
@@ -1424,9 +1455,12 @@ export const getGuestsList = async (req: AuthenticatedRequest, res: Response): P
         checkOutDateRaw: activeBooking?.checkOutDate || null,
         totalVisits: guestBookings.length || 1,
         activeBookingNumber: activeBooking?.bookingNumber || 'N/A',
-        dueAmount: activeBooking?.dueAmount || 0,
-        totalAmount: activeBooking?.totalAmount || 0,
-        paidAmount: activeBooking?.paidAmount || 0,
+        paymentStatus: guestPaymentStatus,
+        balanceAmount: guestDue,
+        dueAmount: guestDue,
+        advanceAmount: guestPaid,
+        paidAmount: guestPaid,
+        totalAmount: guestTotal,
         accompanyingGuests: activeBooking?.accompanyingGuests || [],
         idType: gObj.idProof?.idType || 'AADHAAR',
         idNumber: gObj.idProof?.idNumber || 'N/A',

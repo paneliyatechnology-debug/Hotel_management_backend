@@ -15,8 +15,9 @@ import sendEmail from '../utils/sendEmail';
 import logAuditAction from '../utils/auditLogger';
 import { receptionistCredentialsEmailTemplate } from '../utils/emailTemplates';
 import { computeSubscriptionMetrics } from './authController';
-import { emitToHotel } from '../utils/socketService';
 import { checkEmailExistsGlobally } from '../utils/emailValidator';
+import { autoCompleteExpiredCleaningRooms } from '../utils/housekeepingService';
+import { emitToHotel } from '../utils/socketService';
 
 import BookingCharge from '../models/BookingCharge';
 
@@ -30,6 +31,9 @@ export const getHotelAdminDashboard = async (req: AuthenticatedRequest, res: Res
       return;
     }
     const hotelObjId = new mongoose.Types.ObjectId(hotelId.toString());
+
+    // 🧹 Auto-complete any expired housekeeping turnaround rooms to AVAILABLE before KPI calculation
+    await autoCompleteExpiredCleaningRooms(hotelId);
 
     // Room Status Counts
     const availableRooms = await Room.countDocuments({ hotel: hotelId, status: 'AVAILABLE', isActive: true, isDeleted: { $ne: true } });
@@ -580,6 +584,9 @@ export const updateRoomType = async (req: AuthenticatedRequest, res: Response): 
 
 export const getRooms = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    // 🧹 Auto-complete any expired housekeeping turnaround rooms to AVAILABLE
+    await autoCompleteExpiredCleaningRooms(req.hotelId);
+
     const { status, roomType, search, page, limit } = req.query;
     const query: any = { hotel: req.hotelId, isDeleted: { $ne: true }, isActive: true };
 
@@ -805,6 +812,8 @@ export const updateRoomStatus = async (req: AuthenticatedRequest, res: Response)
     if (status === 'CLEANING') {
       room.cleaningStartedAt = new Date();
       room.cleaningDurationMinutes = Number(cleaningDurationMinutes) || 15;
+    } else {
+      room.cleaningStartedAt = undefined;
     }
 
     if (oldStatus === 'OCCUPIED' && (status === 'CLEANING' || status === 'AVAILABLE')) {
@@ -1226,60 +1235,78 @@ export const deleteRoomType = async (req: AuthenticatedRequest, res: Response): 
     const isPermanent = req.query.permanent === 'true' || req.body?.permanent === true;
     const roomType = await RoomType.findOne({ _id: req.params.id, hotel: req.hotelId });
     if (!roomType) {
-      res.status(404).json({ success: false, message: 'Room type not found.' });
+      res.status(404).json({ success: false, message: 'Room category not found.' });
       return;
     }
 
-    // 🔒 Check all active non-deleted rooms belonging to this category
-    const activeRooms = await Room.find({ hotel: req.hotelId, roomType: roomType._id, isDeleted: { $ne: true } });
+    // 1. Find all active non-deleted rooms belonging to this category
+    const linkedRooms = await Room.find({ hotel: req.hotelId, roomType: roomType._id, isDeleted: { $ne: true } });
+    const linkedRoomIds = linkedRooms.map((r) => r._id);
+    const linkedRoomNumbers = linkedRooms.map((r) => r.roomNumber);
 
-    // Check if any room is busy / occupied / cleaning / maintenance / blocked
-    const busyRooms = activeRooms.filter((r) => r.status !== 'AVAILABLE');
-    if (busyRooms.length > 0) {
-      const busyList = busyRooms.map((r) => `Room ${r.roomNumber} (${r.status})`).join(', ');
-      res.status(400).json({
-        success: false,
-        message: `Cannot delete Category '${roomType.name}' because ${busyRooms.length} room(s) are currently not AVAILABLE (${busyList}). Rooms must be available and not booked or under housekeeping/cleaning to delete.`,
-      });
-      return;
-    }
-
-    // Check for any active ongoing bookings for this category
-    const activeBooking = await Booking.findOne({
+    // 2. Find any active in-house or confirmed bookings linked to these rooms or category
+    const activeBookings = await Booking.find({
       hotel: req.hotelId,
-      roomType: roomType._id,
       status: { $in: ['CHECKED_IN', 'RESERVED', 'CONFIRMED'] },
+      $or: [
+        { roomType: roomType._id },
+        { room: { $in: linkedRoomIds } },
+        { rooms: { $in: linkedRoomIds } },
+        { roomNumber: { $in: linkedRoomNumbers } },
+        { roomNumbers: { $in: linkedRoomNumbers } },
+      ],
+      isDeleted: { $ne: true },
     });
-    if (activeBooking) {
-      res.status(400).json({
-        success: false,
-        message: `Cannot delete Category '${roomType.name}' because active bookings (${activeBooking.status}) exist under this category.`,
-      });
-      return;
+
+    // 3. Auto Check-Out active resident guests (preserve guest profiles & transaction ledgers in DB)
+    const now = new Date();
+    for (const b of activeBookings) {
+      b.status = 'CHECKED_OUT';
+      b.actualCheckOut = now;
+      if (!b.checkOutDate || new Date(b.checkOutDate) > now) {
+        b.checkOutDate = now;
+      }
+      if (!b.paymentStatus || b.paymentStatus === 'PENDING') {
+        if ((b.dueAmount || 0) <= 0 && (b.paidAmount || 0) > 0) {
+          b.paymentStatus = 'PAID';
+        } else if ((b.paidAmount || 0) > 0) {
+          b.paymentStatus = 'PARTIALLY_PAID';
+        }
+      }
+      b.specialRequests = (b.specialRequests ? b.specialRequests + ' | ' : '') + `Auto-settled & checked-out: Category '${roomType.name}' deleted by admin.`;
+      await b.save();
     }
 
+    // 4. Soft-delete / Archive all linked rooms of this category
+    if (linkedRoomIds.length > 0) {
+      await Room.updateMany(
+        { _id: { $in: linkedRoomIds } },
+        { $set: { isDeleted: true, isActive: false, status: 'AVAILABLE' } }
+      );
+    }
+
+    // 5. Soft-delete / Archive the category itself
     if (isPermanent) {
-      // Data Integrity Check: Prevent hard deletion if rooms or bookings reference this room type
-      const linkedRoomsCount = activeRooms.length;
-      const linkedBookingsCount = await Booking.countDocuments({ hotel: req.hotelId, roomType: roomType._id });
-
-      if (linkedRoomsCount > 0 || linkedBookingsCount > 0) {
-        res.status(400).json({
-          success: false,
-          message: `Cannot permanently delete '${roomType.name}' because it has ${linkedRoomsCount} active rooms and ${linkedBookingsCount} linked bookings. Please use soft delete to preserve historical integrity.`,
-        });
-        return;
-      }
-
       await RoomType.findByIdAndDelete(roomType._id);
-      res.status(200).json({ success: true, message: `Room category '${roomType.name}' permanently deleted.` });
+      if (linkedRoomIds.length > 0) {
+        await Room.deleteMany({ _id: { $in: linkedRoomIds } });
+      }
     } else {
-      // Default: Safe Soft Delete
       roomType.isActive = false;
       roomType.isDeleted = true;
       await roomType.save();
-      res.status(200).json({ success: true, message: `Room category '${roomType.name}' soft-deleted (archived). Historical records preserved.` });
     }
+
+    const checkOutNote = activeBookings.length > 0 
+      ? ` ${activeBookings.length} resident guest(s) safely checked out with stay & billing history preserved.` 
+      : '';
+
+    res.status(200).json({
+      success: true,
+      message: `Room category '${roomType.name}' and ${linkedRooms.length} associated room(s) deleted successfully.${checkOutNote}`,
+      deletedRoomsCount: linkedRooms.length,
+      checkedOutBookingsCount: activeBookings.length,
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }

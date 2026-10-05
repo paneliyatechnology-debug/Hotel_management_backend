@@ -63,6 +63,8 @@ export interface IBooking extends Document {
   totalAmount: number;
   paidAmount: number;
   dueAmount: number;
+  paymentStatus?: string;
+  isDeleted?: boolean;
 
   status: BookingStatus;
   guestSignature?: string;
@@ -135,6 +137,8 @@ const bookingSchema = new Schema<IBooking>(
     totalAmount: { type: Number, required: true, min: 0 },
     paidAmount: { type: Number, default: 0, min: 0 },
     dueAmount: { type: Number, required: true, min: 0 },
+    paymentStatus: { type: String, default: 'PENDING' },
+    isDeleted: { type: Boolean, default: false },
     status: {
       type: String,
       enum: ['PENDING', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'CANCELLED', 'NO_SHOW'],
