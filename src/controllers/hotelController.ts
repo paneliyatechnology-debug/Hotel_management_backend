@@ -3,9 +3,8 @@ import crypto from 'crypto';
 import Hotel from '../models/Hotel';
 import User from '../models/User';
 import SystemSettings from '../models/SystemSettings';
-import sendEmail from '../utils/sendEmail';
-import { hotelApprovedEmailTemplate } from '../utils/emailTemplates';
 import { checkEmailExistsGlobally } from '../utils/emailValidator';
+import { queueEmail } from '../queues/emailQueue';
 
 // @desc    Register a new Hotel & Immediately activate 30-Day Free Trial + send credentials
 // @route   POST /api/v1/hotels/register
@@ -129,21 +128,15 @@ export const registerHotel = async (req: Request, res: Response): Promise<void> 
 
     const loginUrl = process.env.WEB_URL ? `${process.env.WEB_URL}/login` : 'https://myownpms.com/login';
 
-    // Send Credentials Email to Hotel Owner asynchronously (non-blocking)
-    sendEmail({
-      email: hotel.ownerEmail,
-      subject: `🎉 Congratulations! ${hotel.name} Registered - Your Admin Credentials`,
-      html: hotelApprovedEmailTemplate({
-        hotelName: hotel.name,
-        ownerName: hotel.ownerName,
-        adminEmail: hotel.ownerEmail,
-        temporaryPassword: finalPassword,
-        trialStartDate: new Date().toLocaleDateString(),
-        trialEndDate: trialEnd.toLocaleDateString(),
-        loginUrl,
-      }),
-    }).catch((emailError: any) => {
-      console.warn('Credentials email failed to send:', emailError.message);
+    // Queue Credentials Email to Hotel Owner asynchronously via reliable queue
+    await queueEmail('HOTEL_REGISTERED', hotel.ownerEmail, {
+      hotelName: hotel.name,
+      ownerName: hotel.ownerName,
+      adminEmail: hotel.ownerEmail,
+      temporaryPassword: finalPassword,
+      trialStartDate: new Date().toLocaleDateString('en-IN'),
+      trialEndDate: trialEnd.toLocaleDateString('en-IN'),
+      loginUrl,
     });
 
     res.status(201).json({

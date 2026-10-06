@@ -20,18 +20,30 @@ import uploadRoutes from './routes/uploadRoutes';
 
 import { ensureDefaultPlansExist } from './controllers/subscriptionPlanController';
 import { autoCompleteExpiredCleaningRooms } from './utils/housekeepingService';
+import { initializeEmailQueue, getEmailQueueStatus } from './queues/emailQueue';
+import { startEmailWorker, stopEmailWorker } from './workers/emailWorker';
 
 // Load environment variables
 dotenv.config();
 
-// Connect to MongoDB
-connectDB().then(() => {
+// Connect to MongoDB & Initialize Background Workers
+connectDB().then(async () => {
   ensureDefaultPlansExist().catch((err) => console.error('Error seeding default plans:', err));
 
   // 🧹 Automatic Housekeeping 100% Turnaround -> AVAILABLE Background Job (Runs every 10 seconds)
   setInterval(() => {
     autoCompleteExpiredCleaningRooms().catch((err) => console.error('Housekeeping interval error:', err));
   }, 10000);
+
+  // 📧 Initialize Resilient Email Queue & Worker
+  try {
+    const queueMode = await initializeEmailQueue();
+    if (queueMode === 'REDIS' && process.env.RUN_EMAIL_WORKER_INLINE !== 'false') {
+      startEmailWorker();
+    }
+  } catch (err) {
+    console.error('Failed to initialize email queue:', err);
+  }
 });
 
 const app = express();
@@ -88,6 +100,7 @@ app.get('/', (req: Request, res: Response) => {
     name: 'Multi-Tenant Hotel Management SaaS API',
     version: '1.0.0',
     realTime: 'Socket.io Active',
+    emailQueue: getEmailQueueStatus(),
     modules: {
       auth: '/api/v1/auth',
       publicHotels: '/api/v1/hotels',
@@ -104,3 +117,29 @@ const PORT: number = Number(process.env.PORT) || 5000;
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Multi-Tenant Hotel Management Server & Socket.io running on port ${PORT}`);
 });
+
+// Graceful Shutdown
+const handleGracefulShutdown = async (signal: string) => {
+  console.log(`\n🛑 Received ${signal}. Initiating graceful shutdown...`);
+
+  // Safety force-exit timer to prevent keep-alive WebSocket connections from hanging process termination
+  const forceExitTimer = setTimeout(() => {
+    console.warn('⚠️ Forced server shutdown after timeout.');
+    process.exit(0);
+  }, 3000);
+  forceExitTimer.unref();
+
+  try {
+    await stopEmailWorker();
+  } catch (err) {
+    console.error('Error during email worker shutdown:', err);
+  }
+
+  httpServer.close(() => {
+    console.log('HTTP Server closed. Exiting process.');
+    process.exit(0);
+  });
+};
+
+process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));

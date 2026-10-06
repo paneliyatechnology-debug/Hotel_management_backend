@@ -10,15 +10,9 @@ import Guest from '../models/Guest';
 import Booking from '../models/Booking';
 import Room from '../models/Room';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
-import sendEmail from '../utils/sendEmail';
 import logAuditAction from '../utils/auditLogger';
 import { emitToHotel, emitToSuperAdmin, emitGlobal } from '../utils/socketService';
-import {
-  hotelApprovedEmailTemplate,
-  hotelRejectedEmailTemplate,
-  hotelStatusDisabledEmailTemplate,
-  hotelReEnabledEmailTemplate,
-} from '../utils/emailTemplates';
+import { queueEmail } from '../queues/emailQueue';
 
 // @desc    Super Admin Dashboard Summary & KPI Metrics
 // @route   GET /api/v1/super-admin/dashboard
@@ -355,23 +349,15 @@ export const approveHotel = async (req: AuthenticatedRequest, res: Response): Pr
     }
 
     const loginUrl = process.env.WEB_URL ? `${process.env.WEB_URL}/login` : 'https://myownpms.com/login';
-    try {
-      await sendEmail({
-        email: hotel.ownerEmail,
-        subject: `🎉 Congratulations! ${hotel.name} Approved - Your Admin Credentials`,
-        html: hotelApprovedEmailTemplate({
-          hotelName: hotel.name,
-          ownerName: hotel.ownerName,
-          adminEmail: hotel.ownerEmail,
-          temporaryPassword: rawTempPassword,
-          loginUrl,
-          trialStartDate: trialStart.toLocaleDateString('en-IN'),
-          trialEndDate: trialEnd.toLocaleDateString('en-IN'),
-        }),
-      });
-    } catch (emailErr: any) {
-      console.warn('Failed to send approval email:', emailErr.message);
-    }
+    await queueEmail('HOTEL_APPROVED', hotel.ownerEmail, {
+      hotelName: hotel.name,
+      ownerName: hotel.ownerName,
+      adminEmail: hotel.ownerEmail,
+      temporaryPassword: rawTempPassword,
+      loginUrl,
+      trialStartDate: trialStart.toLocaleDateString('en-IN'),
+      trialEndDate: trialEnd.toLocaleDateString('en-IN'),
+    });
 
     if (req.user) {
       await logAuditAction({
@@ -419,15 +405,11 @@ export const rejectHotel = async (req: AuthenticatedRequest, res: Response): Pro
     hotel.rejectionReason = reason || 'Documentation or criteria did not match requirements.';
     await hotel.save();
 
-    try {
-      await sendEmail({
-        email: hotel.ownerEmail,
-        subject: `Hotel Registration Status Update: ${hotel.name}`,
-        html: hotelRejectedEmailTemplate(hotel.name, hotel.ownerName, hotel.rejectionReason || 'Criteria not met'),
-      });
-    } catch (emailErr: any) {
-      console.warn('Rejection email failed to send:', emailErr.message);
-    }
+    await queueEmail('HOTEL_REJECTED', hotel.ownerEmail, {
+      hotelName: hotel.name,
+      ownerName: hotel.ownerName,
+      reason: hotel.rejectionReason || 'Criteria not met',
+    });
 
     if (req.user) {
       await logAuditAction({
@@ -483,28 +465,20 @@ export const updateHotelStatus = async (req: AuthenticatedRequest, res: Response
     hotel.statusReason = reason || '';
     await hotel.save();
 
-    // 📧 Send Email Notification to Hotel Owner with the Exact Reason
-    try {
-      if (status === 'DISABLED' || status === 'SUSPENDED') {
-        await sendEmail({
-          email: hotel.ownerEmail,
-          subject: `⚠️ Notice: Your Hotel Account Has Been ${status} - ${hotel.name}`,
-          html: hotelStatusDisabledEmailTemplate({
-            hotelName: hotel.name,
-            ownerName: hotel.ownerName,
-            status,
-            reason: reason || 'Administrative policy compliance.',
-          }),
-        });
-      } else if (status === 'ACTIVE' && (oldStatus === 'DISABLED' || oldStatus === 'SUSPENDED')) {
-        await sendEmail({
-          email: hotel.ownerEmail,
-          subject: `✅ Good News: Your Hotel Account Has Been Re-Activated - ${hotel.name}`,
-          html: hotelReEnabledEmailTemplate(hotel.name, hotel.ownerName),
-        });
-      }
-    } catch (emailErr: any) {
-      console.warn('Status change notification email failed to send:', emailErr.message);
+    // 📧 Queue Email Notification to Hotel Owner with the Exact Reason
+    if (status === 'DISABLED' || status === 'SUSPENDED') {
+      await queueEmail('HOTEL_STATUS_CHANGED', hotel.ownerEmail, {
+        hotelName: hotel.name,
+        ownerName: hotel.ownerName,
+        status,
+        reason: reason || 'Administrative policy compliance.',
+      });
+    } else if (status === 'ACTIVE' && (oldStatus === 'DISABLED' || oldStatus === 'SUSPENDED')) {
+      await queueEmail('HOTEL_STATUS_CHANGED', hotel.ownerEmail, {
+        hotelName: hotel.name,
+        ownerName: hotel.ownerName,
+        status: 'ACTIVE',
+      });
     }
 
     if (req.user) {
@@ -733,24 +707,10 @@ export const resetHotelAdminPassword = async (req: AuthenticatedRequest, res: Re
     adminUser.mustChangePassword = true;
     await adminUser.save();
 
-    try {
-      await sendEmail({
-        email: adminUser.email,
-        subject: `Your Hotel Admin Password Has Been Reset - ${hotel.name}`,
-        html: `
-          <div style="font-family: Arial; padding: 25px; background: #0f172a; color: #fff; border-radius: 8px;">
-            <h2 style="color: #f59e0b;">Password Reset Notification</h2>
-            <p>Your password for Hotel Admin account at <strong>${hotel.name}</strong> was reset by Super Administrator.</p>
-            <div style="background: #1e293b; padding: 15px; border-radius: 6px; margin: 15px 0;">
-              <p style="margin: 0; color: #94a3b8;">New Temporary Password: <strong style="color: #34d399; font-family: monospace; font-size: 16px;">${rawTempPassword}</strong></p>
-            </div>
-            <p style="font-size: 12px; color: #94a3b8;">You will be asked to create a new password on your next login.</p>
-          </div>
-        `,
-      });
-    } catch (e: any) {
-      console.warn('Failed to send reset email:', e.message);
-    }
+    await queueEmail('HOTEL_ADMIN_PASSWORD_RESET', adminUser.email, {
+      hotelName: hotel.name,
+      temporaryPassword: rawTempPassword,
+    });
 
     res.status(200).json({
       success: true,

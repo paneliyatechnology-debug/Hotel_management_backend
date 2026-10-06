@@ -8,9 +8,8 @@ import Booking from '../models/Booking';
 import BookingCharge from '../models/BookingCharge';
 import Payment from '../models/Payment';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
-import sendEmail from '../utils/sendEmail';
+import { queueEmail } from '../queues/emailQueue';
 import logAuditAction from '../utils/auditLogger';
-import { paymentReceiptTemplate, guestBookingConfirmationTemplate } from '../utils/emailTemplates';
 import { extractAndVerifyAadhaarOCR, extractAndVerifyDrivingLicense } from '../utils/surepassService';
 import { emitToHotel } from '../utils/socketService';
 import { uploadToCloudinary } from '../utils/cloudinary';
@@ -1056,41 +1055,35 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
             'Dial 0 from room intercom for 24/7 Front Desk assistance.',
           ];
 
-      sendEmail({
-        email: recipientGuestEmail,
-        subject: `🏨 Stay Confirmation & Pass - Room #${combinedRoomNumbers} at ${req.hotel?.name || 'The Hotel'}`,
-        html: guestBookingConfirmationTemplate({
-          hotelName: req.hotel?.name || 'The Grand Royale Hotel',
-          hotelAddress: req.hotel?.address || '',
-          hotelPhone: req.hotel?.ownerPhone || '',
-          hotelEmail: req.hotel?.ownerEmail || '',
-          guestName: guest.fullName,
-          guestEmail: recipientGuestEmail,
-          guestPhone: guest.mobileNumber || '',
-          bookingNumber: booking.bookingNumber,
-          roomNumbers: combinedRoomNumbers,
-          roomCategory: primaryRoom.roomType?.name || primaryRoom.category || 'Standard Room',
-          bedType: primaryRoom.bedType || primaryRoom.roomType?.bedType || '1 King Bed',
-          checkInDate: cInDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }),
-          checkInTime: inTimeStr,
-          checkOutDate: cOutDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }),
-          checkOutTime: '12:00 PM (Noon)',
-          numberOfNights,
-          totalGuests: Math.max(1, Number(adults) || 1) + Number(children || 0) + filteredMembers.length,
-          adults: Math.max(1, Number(adults) || 1),
-          children: Number(children) || 0,
-          accompanyingMembers: filteredMembers.map((m: any) => m.name),
-          totalAmount,
-          paidAmount: advancePaid,
-          dueAmount,
-          securityDeposit: depositAmt,
-          paymentMethod: cleanPaymentMethod,
-          amenities: Array.from(amenitiesSet),
-          rulesAndInstructions: policiesList,
-          specialRequests: specialRequests || '',
-        }),
-      }).catch((emailErr: any) => {
-        console.warn('⚠️ [sendEmail] Failed to send guest booking confirmation email:', emailErr.message);
+      await queueEmail('GUEST_BOOKING_CONFIRMATION', recipientGuestEmail, {
+        hotelName: req.hotel?.name || 'The Grand Royale Hotel',
+        hotelAddress: req.hotel?.address || '',
+        hotelPhone: req.hotel?.ownerPhone || '',
+        hotelEmail: req.hotel?.ownerEmail || '',
+        guestName: guest.fullName,
+        guestEmail: recipientGuestEmail,
+        guestPhone: guest.mobileNumber || '',
+        bookingNumber: booking.bookingNumber,
+        roomNumbers: combinedRoomNumbers,
+        roomCategory: primaryRoom.roomType?.name || primaryRoom.category || 'Standard Room',
+        bedType: primaryRoom.bedType || primaryRoom.roomType?.bedType || '1 King Bed',
+        checkInDate: cInDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }),
+        checkInTime: inTimeStr,
+        checkOutDate: cOutDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }),
+        checkOutTime: '12:00 PM (Noon)',
+        numberOfNights,
+        totalGuests: Math.max(1, Number(adults) || 1) + Number(children || 0) + filteredMembers.length,
+        adults: Math.max(1, Number(adults) || 1),
+        children: Number(children) || 0,
+        accompanyingMembers: filteredMembers.map((m: any) => m.name),
+        totalAmount,
+        paidAmount: advancePaid,
+        dueAmount,
+        securityDeposit: depositAmt,
+        paymentMethod: cleanPaymentMethod,
+        amenities: Array.from(amenitiesSet),
+        rulesAndInstructions: policiesList,
+        specialRequests: specialRequests || '',
       });
     }
 
@@ -1253,32 +1246,24 @@ export const processCheckOut = async (req: AuthenticatedRequest, res: Response):
     const roomObj = booking.room as any;
 
     if (guestObj && guestObj.email) {
-      try {
-        await sendEmail({
-          email: guestObj.email,
-          subject: `Invoice & Checkout Settlement - ${req.hotel?.name || 'Hotel'}`,
-          html: paymentReceiptTemplate({
-            hotelName: req.hotel?.name || 'The Hotel',
-            hotelAddress: req.hotel?.address || '',
-            hotelGst: req.hotel?.gstNumber,
-            receiptNumber: receiptNumber || `INV-${booking.bookingNumber}`,
-            bookingNumber: booking.bookingNumber,
-            guestName: guestObj.fullName || 'Guest',
-            roomNumber: roomObj?.roomNumber || '101',
-            roomType: 'Room Stay',
-            checkIn: new Date(booking.checkInDate).toLocaleDateString('en-IN'),
-            checkOut: new Date().toLocaleDateString('en-IN'),
-            amount: booking.totalAmount,
-            paymentMethod: paymentMethod || 'CASH',
-            paymentType: 'Full Checkout Settlement',
-            balanceDue: booking.dueAmount,
-            collectedByName: req.user?.name || 'Front Desk',
-            date: new Date().toLocaleDateString('en-IN'),
-          }),
-        });
-      } catch (err: any) {
-        console.warn('Failed to email receipt:', err.message);
-      }
+      await queueEmail('GUEST_CHECKOUT_RECEIPT', guestObj.email, {
+        hotelName: req.hotel?.name || 'The Hotel',
+        hotelAddress: req.hotel?.address || '',
+        hotelGst: req.hotel?.gstNumber,
+        receiptNumber: receiptNumber || `INV-${booking.bookingNumber}`,
+        bookingNumber: booking.bookingNumber,
+        guestName: guestObj.fullName || 'Guest',
+        roomNumber: roomObj?.roomNumber || '101',
+        roomType: 'Room Stay',
+        checkIn: new Date(booking.checkInDate).toLocaleDateString('en-IN'),
+        checkOut: new Date().toLocaleDateString('en-IN'),
+        amount: booking.totalAmount,
+        paymentMethod: paymentMethod || 'CASH',
+        paymentType: 'Full Checkout Settlement',
+        balanceDue: booking.dueAmount,
+        collectedByName: req.user?.name || 'Front Desk',
+        date: new Date().toLocaleDateString('en-IN'),
+      });
     }
 
     if (req.user) {
