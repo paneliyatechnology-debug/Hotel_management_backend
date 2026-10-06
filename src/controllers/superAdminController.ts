@@ -38,6 +38,11 @@ export const getSuperAdminDashboard = async (req: AuthenticatedRequest, res: Res
     const endOfToday = new Date();
     endOfToday.setHours(23, 59, 59, 999);
 
+    const startOfYesterday = new Date(startOfToday);
+    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+    const endOfYesterday = new Date(startOfYesterday);
+    endOfYesterday.setHours(23, 59, 59, 999);
+
     const now = new Date();
     const dayOfWeek = now.getDay();
     const diffToMonday = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
@@ -45,10 +50,16 @@ export const getSuperAdminDashboard = async (req: AuthenticatedRequest, res: Res
     startOfWeek.setHours(0, 0, 0, 0);
 
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const startOfLastMonth = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1);
+    const endOfLastMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 0, 23, 59, 59, 999);
 
     // Global Multi-Hotel Metrics
     const totalGuests = await Guest.countDocuments({ isDeleted: { $ne: true } });
     const totalBookings = await Booking.countDocuments({ isDeleted: { $ne: true } });
+    const totalRooms = await Room.countDocuments({ isDeleted: { $ne: true } });
+
+    const distinctCities = (await Hotel.distinct('city', { isDeleted: false })).filter(Boolean);
+    const totalCities = distinctCities.length || (totalHotels > 0 ? 1 : 0);
 
     const todayCheckIns = await Booking.countDocuments({
       isDeleted: { $ne: true },
@@ -72,15 +83,40 @@ export const getSuperAdminDashboard = async (req: AuthenticatedRequest, res: Res
       { $match: { paymentStatus: 'PAID', createdAt: { $gte: startOfMonth } } },
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]);
+    const lastMonthPaymentsAgg = await Payment.aggregate([
+      { $match: { paymentStatus: 'PAID', createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
     const todayPaymentsAgg = await Payment.aggregate([
       { $match: { paymentStatus: 'PAID', createdAt: { $gte: startOfToday, $lte: endOfToday } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
+    const yesterdayPaymentsAgg = await Payment.aggregate([
+      { $match: { paymentStatus: 'PAID', createdAt: { $gte: startOfYesterday, $lte: endOfYesterday } } },
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]);
 
     const totalRevenue = allPaymentsAgg.length > 0 ? allPaymentsAgg[0].total : 0;
     const weeklyRevenue = weeklyPaymentsAgg.length > 0 ? weeklyPaymentsAgg[0].total : 0;
     const monthlyRevenue = monthlyPaymentsAgg.length > 0 ? monthlyPaymentsAgg[0].total : 0;
+    const lastMonthRevenue = lastMonthPaymentsAgg.length > 0 ? lastMonthPaymentsAgg[0].total : 0;
     const todayRevenue = todayPaymentsAgg.length > 0 ? todayPaymentsAgg[0].total : 0;
+    const yesterdayRevenue = yesterdayPaymentsAgg.length > 0 ? yesterdayPaymentsAgg[0].total : 0;
+
+    // Real orders count
+    const paidOrdersCount = await Payment.countDocuments({ paymentStatus: 'PAID' });
+    const totalOrders = paidOrdersCount || totalBookings || 0;
+
+    // Calculate dynamic growth percentages from real data
+    const calcGrowth = (current: number, previous: number): string => {
+      if (previous === 0 && current === 0) return '0%';
+      if (previous === 0) return '+100%';
+      const diff = ((current - previous) / previous) * 100;
+      return `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%`;
+    };
+
+    const todayGrowth = calcGrowth(todayRevenue, yesterdayRevenue);
+    const monthlyGrowth = calcGrowth(monthlyRevenue, lastMonthRevenue);
 
     // Total Pending Dues Across Hotels
     const pendingDuesSummary = await Booking.aggregate([
@@ -99,6 +135,14 @@ export const getSuperAdminDashboard = async (req: AuthenticatedRequest, res: Res
       .sort({ createdAt: -1 })
       .limit(5);
 
+    // Recent 10 Real Transactions from Database
+    const recentPayments = await Payment.find({ paymentStatus: 'PAID' })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .populate('hotel', 'name city')
+      .populate('guest', 'name phone email')
+      .lean();
+
     res.status(200).json({
       success: true,
       data: {
@@ -112,14 +156,22 @@ export const getSuperAdminDashboard = async (req: AuthenticatedRequest, res: Res
         activeSubscriptions,
         totalGuests,
         totalBookings,
+        totalRooms,
+        totalCities,
+        citiesList: distinctCities,
         todayCheckIns,
         todayCheckOuts,
         totalRevenue,
         weeklyRevenue,
         monthlyRevenue,
         todayRevenue,
+        yesterdayRevenue,
+        todayGrowth,
+        monthlyGrowth,
+        totalOrders,
         pendingPayments,
         recentPending,
+        recentPayments: recentPayments || [],
       },
     });
   } catch (error: any) {
