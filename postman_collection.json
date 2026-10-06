@@ -399,6 +399,16 @@
       "type": "string"
     },
     {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "hotelId",
       "value": "",
       "type": "string"
