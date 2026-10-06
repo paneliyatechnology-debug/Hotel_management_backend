@@ -5,8 +5,7 @@ import User from '../models/User';
 import Hotel from '../models/Hotel';
 import PasswordResetToken from '../models/PasswordResetToken';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
-import sendEmail from '../utils/sendEmail';
-import { passwordResetOtpTemplate } from '../utils/emailTemplates';
+import { queueEmail } from '../queues/emailQueue';
 
 // Access Token Generator (Extended: 7 Days for Uninterrupted Operations)
 export const generateAccessToken = (id: string, role: string): string => {
@@ -442,18 +441,11 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
       expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 mins
     });
 
-    console.log(`\n========================================\n🔑 PASSWORD RESET OTP for ${user.email}: [ ${otp} ]\n========================================\n`);
-
-    // Send OTP email via Dual-Engine Dispatcher
-    try {
-      await sendEmail({
-        email: user.email,
-        subject: 'Your Password Reset OTP - The Grand Royale',
-        html: passwordResetOtpTemplate(user.name, otp),
-      });
-    } catch (e: any) {
-      console.warn('Failed to send OTP email:', e.message);
-    }
+    // Queue OTP email asynchronously for non-blocking fast response
+    await queueEmail('PASSWORD_RESET_OTP', user.email, {
+      userName: user.name,
+      otp,
+    });
 
     res.status(200).json({
       success: true,

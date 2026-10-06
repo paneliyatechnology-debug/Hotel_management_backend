@@ -8,9 +8,8 @@ import Booking from '../models/Booking';
 import BookingCharge from '../models/BookingCharge';
 import Payment from '../models/Payment';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
-import sendEmail from '../utils/sendEmail';
+import { queueEmail } from '../queues/emailQueue';
 import logAuditAction from '../utils/auditLogger';
-import { paymentReceiptTemplate, guestBookingConfirmationTemplate } from '../utils/emailTemplates';
 import { extractAndVerifyAadhaarOCR, extractAndVerifyDrivingLicense } from '../utils/surepassService';
 import { emitToHotel } from '../utils/socketService';
 import { uploadToCloudinary } from '../utils/cloudinary';
@@ -435,8 +434,8 @@ export const registerGuest = async (req: AuthenticatedRequest, res: Response): P
     const rawRoomIds = Array.isArray(req.body.roomIds) && req.body.roomIds.length > 0
       ? req.body.roomIds
       : Array.isArray(req.body.selectedRooms) && req.body.selectedRooms.length > 0
-      ? req.body.selectedRooms.map((r: any) => (typeof r === 'object' ? r._id : r))
-      : [];
+        ? req.body.selectedRooms.map((r: any) => (typeof r === 'object' ? r._id : r))
+        : [];
 
     let allocatedRooms: any[] = [];
     if (rawRoomIds.length > 0) {
@@ -710,8 +709,8 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
     }
 
     // Parse and upload accompanying members ID photos
-    const rawMembers = Array.isArray(accompanyingGuests) && accompanyingGuests.length > 0 
-      ? accompanyingGuests 
+    const rawMembers = Array.isArray(accompanyingGuests) && accompanyingGuests.length > 0
+      ? accompanyingGuests
       : Array.isArray(members) ? members : [];
     const sanitizedMembers = await Promise.all(
       rawMembers.map(async (m: any, index: number) => {
@@ -820,11 +819,11 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
     }
 
     // Support multi-room booking allocation
-    const rawRoomIds = Array.isArray(req.body.roomIds) && req.body.roomIds.length > 0 
-      ? req.body.roomIds 
+    const rawRoomIds = Array.isArray(req.body.roomIds) && req.body.roomIds.length > 0
+      ? req.body.roomIds
       : Array.isArray(req.body.selectedRooms) && req.body.selectedRooms.length > 0
-      ? req.body.selectedRooms
-      : roomId ? [roomId] : [];
+        ? req.body.selectedRooms
+        : roomId ? [roomId] : [];
 
     const sanitizedRoomIds = rawRoomIds
       .map((r: any) => (typeof r === 'object' && r !== null ? String(r._id || r.id) : String(r)))
@@ -834,16 +833,16 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
     if (sanitizedRoomIds.length > 0) {
       allocatedRooms = await Room.find({ _id: { $in: sanitizedRoomIds }, hotel: req.hotelId }).populate('roomType');
     }
-    
+
     if (allocatedRooms.length === 0 && roomNumber) {
-      const roomNumList = Array.isArray(roomNumber) 
-        ? roomNumber 
+      const roomNumList = Array.isArray(roomNumber)
+        ? roomNumber
         : String(roomNumber).split(',').map((s: string) => s.trim());
       allocatedRooms = await Room.find({ hotel: req.hotelId, roomNumber: { $in: roomNumList } }).populate('roomType');
     }
 
     if (allocatedRooms.length === 0) {
-      const defaultRoom = await Room.findOne({ hotel: req.hotelId, status: 'AVAILABLE', isActive: true, isDeleted: { $ne: true } }).populate('roomType') 
+      const defaultRoom = await Room.findOne({ hotel: req.hotelId, status: 'AVAILABLE', isActive: true, isDeleted: { $ne: true } }).populate('roomType')
         || await Room.findOne({ hotel: req.hotelId, isActive: true, isDeleted: { $ne: true } }).populate('roomType');
       if (defaultRoom) {
         allocatedRooms = [defaultRoom];
@@ -929,12 +928,12 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
     const totalRoomCapacity = allocatedRooms.reduce((sum: number, r: any) => {
       const roomTypeObj = typeof r.roomType === 'object' ? r.roomType : null;
       const cap = Number(r.maxCapacity) ||
-                  Number(r.capacity?.adults) ||
-                  Number(r.seatingCapacity) ||
-                  Number(r.maxGuests) ||
-                  Number(roomTypeObj?.capacity?.adults) ||
-                  Number(roomTypeObj?.maxCapacity) ||
-                  2;
+        Number(r.capacity?.adults) ||
+        Number(r.seatingCapacity) ||
+        Number(r.maxGuests) ||
+        Number(roomTypeObj?.capacity?.adults) ||
+        Number(roomTypeObj?.maxCapacity) ||
+        2;
       return sum + cap;
     }, 0);
 
@@ -1129,49 +1128,43 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
       const policiesList = Array.isArray(req.hotel?.settings?.policies) && req.hotel?.settings?.policies.length > 0
         ? req.hotel?.settings?.policies
         : [
-            'Standard Check-Out is strictly 12:00 PM (Noon).',
-            'Government photo ID is required for all staying guests.',
-            'All indoor rooms and corridors are 100% smoke-free zones.',
-            'Quiet hours are observed between 10:00 PM and 07:00 AM.',
-            'Please keep valuables in the in-room safe.',
-            'Dial 0 from room intercom for 24/7 Front Desk assistance.',
-          ];
+          'Standard Check-Out is strictly 12:00 PM (Noon).',
+          'Government photo ID is required for all staying guests.',
+          'All indoor rooms and corridors are 100% smoke-free zones.',
+          'Quiet hours are observed between 10:00 PM and 07:00 AM.',
+          'Please keep valuables in the in-room safe.',
+          'Dial 0 from room intercom for 24/7 Front Desk assistance.',
+        ];
 
-      sendEmail({
-        email: recipientGuestEmail,
-        subject: `🏨 Stay Confirmation & Pass - Room #${combinedRoomNumbers} at ${req.hotel?.name || 'The Hotel'}`,
-        html: guestBookingConfirmationTemplate({
-          hotelName: req.hotel?.name || 'The Grand Royale Hotel',
-          hotelAddress: req.hotel?.address || '',
-          hotelPhone: req.hotel?.ownerPhone || '',
-          hotelEmail: req.hotel?.ownerEmail || '',
-          guestName: guest.fullName,
-          guestEmail: recipientGuestEmail,
-          guestPhone: guest.mobileNumber || '',
-          bookingNumber: booking.bookingNumber,
-          roomNumbers: combinedRoomNumbers,
-          roomCategory: primaryRoom.roomType?.name || primaryRoom.category || 'Standard Room',
-          bedType: primaryRoom.bedType || primaryRoom.roomType?.bedType || '1 King Bed',
-          checkInDate: cInDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }),
-          checkInTime: inTimeStr,
-          checkOutDate: cOutDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }),
-          checkOutTime: outTimeStr,
-          numberOfNights,
-          totalGuests: Math.max(1, Number(adults) || 1) + Number(children || 0) + filteredMembers.length,
-          adults: Math.max(1, Number(adults) || 1),
-          children: Number(children) || 0,
-          accompanyingMembers: filteredMembers.map((m: any) => m.name),
-          totalAmount,
-          paidAmount: advancePaid,
-          dueAmount,
-          securityDeposit: depositAmt,
-          paymentMethod: cleanPaymentMethod,
-          amenities: Array.from(amenitiesSet),
-          rulesAndInstructions: policiesList,
-          specialRequests: specialRequests || '',
-        }),
-      }).catch((emailErr: any) => {
-        console.warn('⚠️ [sendEmail] Failed to send guest booking confirmation email:', emailErr.message);
+      await queueEmail('GUEST_BOOKING_CONFIRMATION', recipientGuestEmail, {
+        hotelName: req.hotel?.name || 'The Grand Royale Hotel',
+        hotelAddress: req.hotel?.address || '',
+        hotelPhone: req.hotel?.ownerPhone || '',
+        hotelEmail: req.hotel?.ownerEmail || '',
+        guestName: guest.fullName,
+        guestEmail: recipientGuestEmail,
+        guestPhone: guest.mobileNumber || '',
+        bookingNumber: booking.bookingNumber,
+        roomNumbers: combinedRoomNumbers,
+        roomCategory: primaryRoom.roomType?.name || primaryRoom.category || 'Standard Room',
+        bedType: primaryRoom.bedType || primaryRoom.roomType?.bedType || '1 King Bed',
+        checkInDate: cInDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }),
+        checkInTime: inTimeStr,
+        checkOutDate: cOutDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }),
+        checkOutTime: '12:00 PM (Noon)',
+        numberOfNights,
+        totalGuests: Math.max(1, Number(adults) || 1) + Number(children || 0) + filteredMembers.length,
+        adults: Math.max(1, Number(adults) || 1),
+        children: Number(children) || 0,
+        accompanyingMembers: filteredMembers.map((m: any) => m.name),
+        totalAmount,
+        paidAmount: advancePaid,
+        dueAmount,
+        securityDeposit: depositAmt,
+        paymentMethod: cleanPaymentMethod,
+        amenities: Array.from(amenitiesSet),
+        rulesAndInstructions: policiesList,
+        specialRequests: specialRequests || '',
       });
     }
 
@@ -1337,32 +1330,24 @@ export const processCheckOut = async (req: AuthenticatedRequest, res: Response):
     const roomObj = booking.room as any;
 
     if (guestObj && guestObj.email) {
-      try {
-        await sendEmail({
-          email: guestObj.email,
-          subject: `Invoice & Checkout Settlement - ${req.hotel?.name || 'Hotel'}`,
-          html: paymentReceiptTemplate({
-            hotelName: req.hotel?.name || 'The Hotel',
-            hotelAddress: req.hotel?.address || '',
-            hotelGst: req.hotel?.gstNumber,
-            receiptNumber: receiptNumber || `INV-${booking.bookingNumber}`,
-            bookingNumber: booking.bookingNumber,
-            guestName: guestObj.fullName || 'Guest',
-            roomNumber: roomObj?.roomNumber || '101',
-            roomType: 'Room Stay',
-            checkIn: new Date(booking.checkInDate).toLocaleDateString('en-IN'),
-            checkOut: new Date().toLocaleDateString('en-IN'),
-            amount: booking.totalAmount,
-            paymentMethod: paymentMethod || 'CASH',
-            paymentType: 'Full Checkout Settlement',
-            balanceDue: booking.dueAmount,
-            collectedByName: req.user?.name || 'Front Desk',
-            date: new Date().toLocaleDateString('en-IN'),
-          }),
-        });
-      } catch (err: any) {
-        console.warn('Failed to email receipt:', err.message);
-      }
+      await queueEmail('GUEST_CHECKOUT_RECEIPT', guestObj.email, {
+        hotelName: req.hotel?.name || 'The Hotel',
+        hotelAddress: req.hotel?.address || '',
+        hotelGst: req.hotel?.gstNumber,
+        receiptNumber: receiptNumber || `INV-${booking.bookingNumber}`,
+        bookingNumber: booking.bookingNumber,
+        guestName: guestObj.fullName || 'Guest',
+        roomNumber: roomObj?.roomNumber || '101',
+        roomType: 'Room Stay',
+        checkIn: new Date(booking.checkInDate).toLocaleDateString('en-IN'),
+        checkOut: new Date().toLocaleDateString('en-IN'),
+        amount: booking.totalAmount,
+        paymentMethod: paymentMethod || 'CASH',
+        paymentType: 'Full Checkout Settlement',
+        balanceDue: booking.dueAmount,
+        collectedByName: req.user?.name || 'Front Desk',
+        date: new Date().toLocaleDateString('en-IN'),
+      });
     }
 
     if (req.user) {
@@ -1472,7 +1457,7 @@ export const getGuestsList = async (req: AuthenticatedRequest, res: Response): P
         const rList = Array.isArray(activeBooking.rooms) && activeBooking.rooms.length > 0
           ? activeBooking.rooms
           : activeBooking.room ? [activeBooking.room] : [];
-        
+
         roomIds = rList.map((rm: any) => rm._id || rm);
         roomNumsList = rList.map((rm: any) => String(rm.roomNumber || '')).filter(Boolean);
 
@@ -1730,7 +1715,7 @@ export const getGuestDetailsById = async (req: AuthenticatedRequest, res: Respon
           activeBooking.numberOfNights = trueNights;
           activeBooking.totalAmount = Math.round((activeBooking.totalAmount / oldNights) * trueNights);
           activeBooking.dueAmount = Math.max(0, activeBooking.totalAmount - (activeBooking.paidAmount || 0));
-          activeBooking.save().catch(() => {});
+          activeBooking.save().catch(() => { });
         }
       }
     }
@@ -1981,7 +1966,7 @@ export const getBookingsList = async (req: AuthenticatedRequest, res: Response):
           b.numberOfNights = trueNights;
           b.totalAmount = Math.round((b.totalAmount / oldNights) * trueNights);
           b.dueAmount = Math.max(0, b.totalAmount - (b.paidAmount || 0));
-          b.save().catch(() => {});
+          b.save().catch(() => { });
           bObj.numberOfNights = trueNights;
           bObj.totalAmount = b.totalAmount;
           bObj.dueAmount = b.dueAmount;
@@ -1992,23 +1977,23 @@ export const getBookingsList = async (req: AuthenticatedRequest, res: Response):
         ...bObj,
         guest: guestObj
           ? {
-              _id: guestObj._id,
-              name: guestObj.fullName,
-              fullName: guestObj.fullName,
-              phone: guestObj.mobileNumber,
-              mobileNumber: guestObj.mobileNumber,
-              email: guestObj.email,
-              gender: guestObj.gender,
-              address: guestObj.address,
-              city: guestObj.city,
-              state: guestObj.state,
-              nationality: guestObj.nationality,
-              idProof: guestObj.idProof || {},
-              frontImage: guestObj.idProof?.frontImage || '',
-              backImage: guestObj.idProof?.backImage || '',
-              govtIdType: guestObj.idProof?.idType || 'AADHAAR',
-              govtIdNumber: guestObj.idProof?.idNumber || '',
-            }
+            _id: guestObj._id,
+            name: guestObj.fullName,
+            fullName: guestObj.fullName,
+            phone: guestObj.mobileNumber,
+            mobileNumber: guestObj.mobileNumber,
+            email: guestObj.email,
+            gender: guestObj.gender,
+            address: guestObj.address,
+            city: guestObj.city,
+            state: guestObj.state,
+            nationality: guestObj.nationality,
+            idProof: guestObj.idProof || {},
+            frontImage: guestObj.idProof?.frontImage || '',
+            backImage: guestObj.idProof?.backImage || '',
+            govtIdType: guestObj.idProof?.idType || 'AADHAAR',
+            govtIdNumber: guestObj.idProof?.idNumber || '',
+          }
           : { name: 'Guest', phone: '', email: '' },
         roomNumber: roomObj ? roomObj.roomNumber : 'N/A',
         checkInDate: checkInDateStr,

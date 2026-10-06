@@ -11,9 +11,8 @@ import Payment from '../models/Payment';
 import CashHandover from '../models/CashHandover';
 import AuditLog from '../models/AuditLog';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
-import sendEmail from '../utils/sendEmail';
 import logAuditAction from '../utils/auditLogger';
-import { receptionistCredentialsEmailTemplate } from '../utils/emailTemplates';
+import { queueEmail } from '../queues/emailQueue';
 import { computeSubscriptionMetrics } from './authController';
 import { checkEmailExistsGlobally } from '../utils/emailValidator';
 import { autoCompleteExpiredCleaningRooms } from '../utils/housekeepingService';
@@ -941,24 +940,17 @@ export const createReceptionist = async (req: AuthenticatedRequest, res: Respons
       mustChangePassword: true,
     });
 
-    // Send credentials email
+    // Queue credentials email asynchronously for non-blocking fast response
     const loginUrl = process.env.WEB_URL ? `${process.env.WEB_URL}/login` : 'https://myownpms.com/login';
-    try {
-      await sendEmail({
-        email: staffMember.email,
-        subject: `Staff Login Credentials (${assignedRole}) - ${req.hotel?.name || 'Hotel'}`,
-        html: receptionistCredentialsEmailTemplate({
-          hotelName: req.hotel?.name || 'The Hotel',
-          receptionistName: staffMember.name,
-          email: staffMember.email,
-          temporaryPassword: rawTempPassword,
-          employeeId: staffMember.employeeId,
-          loginUrl,
-        }),
-      });
-    } catch (err: any) {
-      console.warn('Staff credentials email error:', err.message);
-    }
+    await queueEmail('STAFF_CREDENTIALS', staffMember.email, {
+      hotelName: req.hotel?.name || 'The Hotel',
+      receptionistName: staffMember.name,
+      email: staffMember.email,
+      temporaryPassword: rawTempPassword,
+      employeeId: staffMember.employeeId,
+      loginUrl,
+      role: assignedRole,
+    });
 
     if (req.user) {
       await logAuditAction({
