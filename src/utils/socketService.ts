@@ -74,7 +74,7 @@ export const initSocket = (httpServer: HttpServer): Server => {
       email?: string;
       role?: string;
       hotelId?: string;
-      token?: string;
+      accessToken?: string;
     }) => {
       let targetUserId = data?.userId;
       let targetHotelId = data?.hotelId;
@@ -82,10 +82,10 @@ export const initSocket = (httpServer: HttpServer): Server => {
       let targetEmail = data?.email;
       let targetRole = data?.role;
 
-      if (data?.token && (!targetUserId || !targetHotelId)) {
+      if (data?.accessToken && (!targetUserId || !targetHotelId)) {
         try {
           const secret = process.env.JWT_SECRET || 'super_hotel_jwt_secret_key_2026_modern_secure';
-          const decoded: any = jwt.verify(data.token, secret);
+          const decoded: any = jwt.verify(data.accessToken, secret);
           targetUserId = targetUserId || decoded?.id || decoded?._id;
           targetHotelId = targetHotelId || decoded?.hotel || decoded?.hotelId;
           targetRole = targetRole || decoded?.role;
@@ -155,13 +155,13 @@ export const initSocket = (httpServer: HttpServer): Server => {
     };
 
     // 1. Hotel Room Registration & Presence
-    socket.on('join_hotel', (data: { hotelId?: any; token?: string; user?: any }) => {
+    socket.on('join_hotel', (data: { hotelId?: any; accessToken?: string; user?: any }) => {
       let rawHotelId = data?.hotelId || data?.user?.hotel?._id || data?.user?.hotel;
 
-      if (!rawHotelId && data?.token) {
+      if (!rawHotelId && data?.accessToken) {
         try {
           const secret = process.env.JWT_SECRET || 'super_hotel_jwt_secret_key_2026_modern_secure';
-          const decoded: any = jwt.verify(data.token, secret);
+          const decoded: any = jwt.verify(data.accessToken, secret);
           rawHotelId = decoded?.hotel || decoded?.hotelId;
         } catch {
           // Token decode fallback
@@ -181,13 +181,13 @@ export const initSocket = (httpServer: HttpServer): Server => {
           email: data?.user?.email || '',
           role: data?.user?.role || 'HOTEL_ADMIN',
           hotelId: hIdStr,
-          token: data?.token,
+          accessToken: data?.accessToken,
         });
       }
     });
 
     // 2. Super Admin Global Management Room & Presence
-    socket.on('join_super_admin', (data?: { user?: any; token?: string }) => {
+    socket.on('join_super_admin', (data?: { user?: any; accessToken?: string }) => {
       socket.join('super_admin_room');
       console.log(`👑 [Socket.io] Socket ${socket.id} joined super_admin_room`);
       socket.emit('joined_room', { room: 'super_admin_room', success: true });
@@ -204,7 +204,7 @@ export const initSocket = (httpServer: HttpServer): Server => {
           name: data.user.name,
           email: data.user.email,
           role: 'SUPER_ADMIN',
-          token: data.token,
+          accessToken: data.accessToken,
         });
       }
     });
@@ -216,7 +216,7 @@ export const initSocket = (httpServer: HttpServer): Server => {
       email?: string;
       role?: string;
       hotelId?: string;
-      token?: string;
+      accessToken?: string;
     }) => {
       registerPresence(data);
     });

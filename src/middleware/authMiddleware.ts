@@ -16,23 +16,23 @@ export const authenticateUser = async (
   res: Response,
   next: NextFunction
 ): Promise<void> => {
-  let token: string | undefined;
+  let accessToken: string | undefined;
 
   // Check Cookie first
-  if (req.cookies && req.cookies.token) {
-    token = req.cookies.token;
+  if (req.cookies && req.cookies.accessToken) {
+    accessToken = req.cookies.accessToken;
   } else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-    token = req.headers.authorization.split(' ')[1];
+    accessToken = req.headers.authorization.split(' ')[1];
   }
 
-  if (!token) {
-    res.status(401).json({ success: false, message: 'Authentication required. No token provided.' });
+  if (!accessToken) {
+    res.status(401).json({ success: false, message: 'Authentication required. No access token provided.' });
     return;
   }
 
   try {
     const secret = process.env.JWT_SECRET || 'super_hotel_jwt_secret_key_2026_modern_secure';
-    const decoded = jwt.verify(token, secret) as { id: string; role: string };
+    const decoded = jwt.verify(accessToken, secret) as { id: string; role: string };
 
     const user = await User.findById(decoded.id);
 
@@ -80,7 +80,7 @@ export const authenticateUser = async (
       });
       return;
     }
-    res.status(401).json({ success: false, message: 'Invalid session token. Please login again.' });
+    res.status(401).json({ success: false, message: 'Invalid session access token. Please login again.' });
   }
 };
 

@@ -126,7 +126,7 @@ const sendTokenResponse = async (
 
   res
     .status(statusCode)
-    .cookie('token', accessToken, accessCookieOptions)
+    .cookie('accessToken', accessToken, accessCookieOptions)
     .cookie('refreshToken', refreshToken, refreshCookieOptions)
     .json({
       success: true,
@@ -220,7 +220,7 @@ export const refreshTokenHandler = async (req: Request, res: Response): Promise<
 
     res
       .status(200)
-      .cookie('token', newAccessToken, accessCookieOptions)
+      .cookie('accessToken', newAccessToken, accessCookieOptions)
       .cookie('refreshToken', newRefreshToken, refreshCookieOptions)
       .json({
         success: true,
@@ -595,7 +595,7 @@ export const logoutUser = async (req: Request, res: Response): Promise<void> => 
       sameSite: (isProd ? 'none' : 'lax') as any,
       expires: new Date(0),
     };
-    res.cookie('token', '', clearOptions);
+    res.cookie('accessToken', '', clearOptions);
     res.cookie('refreshToken', '', clearOptions);
     res.status(200).json({ success: true, message: 'Logged out successfully.' });
   } catch (error: any) {

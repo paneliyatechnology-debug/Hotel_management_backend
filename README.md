@@ -12,7 +12,7 @@ A robust, enterprise-grade, multi-tenant REST API built with **Node.js**, **Expr
   - `HOTEL_ADMIN`: Hotel profile, room types, rooms, staff management, analytics & daily collection reports.
   - `RECEPTIONIST`: Real-time room availability, check-in/check-out wizard, folio & payments, cash handover.
 - **Authentication & Security**:
-  - JWT (JSON Web Tokens) with secure HttpOnly cookie & Bearer token support.
+  - JWT (JSON Web Tokens) with dual-token architecture (`accessToken` & `refreshToken` via secure HttpOnly cookie & Bearer token authorization).
   - Password hashing with Bcrypt.
   - Password reset workflows with secure token expiration & transactional emails.
 - **Email Notifications**: Nodemailer integration for welcome emails, password resets, and booking confirmations.
