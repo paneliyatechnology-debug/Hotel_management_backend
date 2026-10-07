@@ -625,22 +625,8 @@ export const createRoom = async (req: AuthenticatedRequest, res: Response): Prom
       return;
     }
 
-    // 🔒 SUBSCRIPTION TRIAL ROOM LIMIT CHECK (Free Trial = max 5 rooms)
+    // 🔓 Free Trial Unlimited Rooms Enabled
     const hotel = await Hotel.findById(req.hotelId);
-    const plan = hotel?.subscription?.plan || 'TRIAL';
-    const subStatus = hotel?.subscription?.status || 'TRIAL';
-    const isFreeTrial = plan === 'TRIAL' || subStatus === 'TRIAL';
-
-    if (isFreeTrial) {
-      const activeRoomCount = await Room.countDocuments({ hotel: req.hotelId, isDeleted: { $ne: true } });
-      if (activeRoomCount >= 5) {
-        res.status(403).json({
-          success: false,
-          message: 'Free Trial Limit Reached! Free Trial plan allows creating up to 5 custom rooms. Please upgrade to a Premium plan to add more rooms.',
-        });
-        return;
-      }
-    }
 
     const targetFloor = Number(floor) || 1;
     const targetRoomNumber = roomNumber.toString().trim();
@@ -825,7 +811,10 @@ export const updateRoomStatus = async (req: AuthenticatedRequest, res: Response)
       });
       if (activeBooking) {
         activeBooking.status = 'CHECKED_OUT';
-        activeBooking.actualCheckOut = new Date();
+        const actualNow = new Date();
+        activeBooking.actualCheckOut = actualNow;
+        activeBooking.checkOutDate = actualNow;
+        activeBooking.checkOutTime = `${String(actualNow.getHours()).padStart(2, '0')}:${String(actualNow.getMinutes()).padStart(2, '0')}`;
         await activeBooking.save();
         emitToHotel(req.hotelId, 'BOOKING_UPDATED', { bookingId: activeBooking._id, status: 'CHECKED_OUT' });
       }
@@ -1263,6 +1252,7 @@ export const deleteRoomType = async (req: AuthenticatedRequest, res: Response): 
     for (const b of activeBookings) {
       b.status = 'CHECKED_OUT';
       b.actualCheckOut = now;
+      b.checkOutTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       if (!b.checkOutDate || new Date(b.checkOutDate) > now) {
         b.checkOutDate = now;
       }

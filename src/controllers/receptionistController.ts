@@ -570,8 +570,8 @@ export const registerGuest = async (req: AuthenticatedRequest, res: Response): P
           roomType: (primaryRoom.roomType as any)?._id || primaryRoom.roomType,
           checkInDate: checkIn,
           checkOutDate: checkOut,
-          checkInTime: req.body.checkInTime || '14:00',
-          checkOutTime: '12:00',
+          checkInTime: req.body.checkInTime || req.hotel?.settings?.checkInTime || '14:00',
+          checkOutTime: req.body.checkOutTime || req.hotel?.settings?.checkOutTime || '12:00',
           numberOfNights: nights,
           baseAmount: totalAmt,
           totalAmount: totalAmt,
@@ -857,8 +857,8 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
 
     // Format & Calculate Check-in and Check-out Date/Time
     const nowTimeStr = new Date().toTimeString().slice(0, 5);
-    const inTimeStr = checkInTime || nowTimeStr || '14:00';
-    const outTimeStr = '12:00'; // Standard Fixed 12:00 PM (Noon) Check-out Time
+    const inTimeStr = checkInTime || nowTimeStr || req.hotel?.settings?.checkInTime || '14:00';
+    const outTimeStr = checkOutTime || req.hotel?.settings?.checkOutTime || '12:00';
 
     const cInDate = checkInDate ? new Date(checkInDate) : new Date();
     const [inHours, inMins] = inTimeStr.split(':').map(Number);
@@ -867,7 +867,12 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
     }
 
     let cOutDate = checkOutDate ? new Date(checkOutDate) : new Date(cInDate.getTime() + 86400000);
-    cOutDate.setHours(12, 0, 0, 0); // Always fix checkout time to 12:00 PM Noon
+    const [outHours, outMins] = outTimeStr.split(':').map(Number);
+    if (!isNaN(outHours) && !isNaN(outMins)) {
+      cOutDate.setHours(outHours, outMins, 0, 0);
+    } else {
+      cOutDate.setHours(12, 0, 0, 0);
+    }
 
     const reqCheckInStr = toISODateString(cInDate);
     let reqCheckOutStr = toISODateString(cOutDate);
@@ -876,7 +881,11 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
       dIn.setDate(dIn.getDate() + 1);
       reqCheckOutStr = toISODateString(dIn);
       cOutDate = new Date(dIn);
-      cOutDate.setHours(12, 0, 0, 0);
+      if (!isNaN(outHours) && !isNaN(outMins)) {
+        cOutDate.setHours(outHours, outMins, 0, 0);
+      } else {
+        cOutDate.setHours(12, 0, 0, 0);
+      }
     }
 
     // 🚫 ROOM MAINTENANCE GUARD
@@ -1146,7 +1155,7 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
           checkInDate: cInDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }),
           checkInTime: inTimeStr,
           checkOutDate: cOutDate.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }),
-          checkOutTime: '12:00 PM (Noon)',
+          checkOutTime: outTimeStr,
           numberOfNights,
           totalGuests: Math.max(1, Number(adults) || 1) + Number(children || 0) + filteredMembers.length,
           adults: Math.max(1, Number(adults) || 1),
@@ -1284,7 +1293,10 @@ export const processCheckOut = async (req: AuthenticatedRequest, res: Response):
     booking.paidAmount += paidNow;
     booking.dueAmount = Math.max(0, booking.totalAmount - booking.paidAmount);
     booking.status = 'CHECKED_OUT';
-    booking.actualCheckOut = new Date();
+    const actualNow = new Date();
+    booking.actualCheckOut = actualNow;
+    booking.checkOutDate = actualNow;
+    booking.checkOutTime = `${String(actualNow.getHours()).padStart(2, '0')}:${String(actualNow.getMinutes()).padStart(2, '0')}`;
     await booking.save();
 
     // Mark All Allocated Rooms for CLEANING with 15-minute housekeeping turnaround timer
