@@ -2,6 +2,7 @@ import express, { Router } from 'express';
 import {
   getReceptionistDashboard,
   getAvailableRooms,
+  getBookingRoomOptions,
   registerGuest,
   verifyGuestId,
   createBookingOrCheckIn,
@@ -48,6 +49,7 @@ router.use(
 router.get('/dashboard', getReceptionistDashboard);
 router.get('/rooms/available', getAvailableRooms);
 router.get('/room-types', getRoomTypes);
+router.get('/booking/room-options', getBookingRoomOptions);
 router.delete('/rooms/:id', deleteRoom);
 router.put('/rooms/:id/status', updateRoomStatus);
 

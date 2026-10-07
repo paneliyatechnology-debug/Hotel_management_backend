@@ -113,148 +113,188 @@ export const getReceptionistDashboard = async (req: AuthenticatedRequest, res: R
   }
 };
 
+// @desc    Helper to compute available rooms list with dynamic stay dates & booking availability
+export const fetchAvailableRoomsData = async (hotelId: any, queryParams: any) => {
+  await resolveCleaningRooms(hotelId);
+  const { roomType, checkInDate, checkOutDate, checkIn, checkOut } = queryParams || {};
+
+  const todayStr = toISODateString(new Date());
+  const tomorrowDate = new Date();
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrowStr = toISODateString(tomorrowDate);
+
+  const cInVal = checkInDate || checkIn;
+  const cOutVal = checkOutDate || checkOut;
+
+  // Normalize requested date boundaries
+  const reqInStr = cInVal ? toISODateString(String(cInVal)) : todayStr;
+  let reqOutStr = cOutVal ? toISODateString(String(cOutVal)) : '';
+  if (!reqOutStr || reqOutStr <= reqInStr) {
+    const dIn = new Date(reqInStr);
+    dIn.setDate(dIn.getDate() + 1);
+    reqOutStr = toISODateString(dIn);
+  }
+
+  const query: any = { hotel: hotelId, isActive: true, isDeleted: { $ne: true } };
+  if (roomType) query.roomType = roomType;
+
+  const rooms = await Room.find(query).populate('roomType').sort({ roomNumber: 1 });
+
+  // Lookup ALL active bookings (CONFIRMED, CHECKED_IN, PENDING, RESERVED) for this hotel
+  const activeBookings = await Booking.find({
+    hotel: hotelId,
+    status: { $nin: ['CANCELLED', 'CHECKED_OUT', 'NO_SHOW', 'VOID', 'REFUNDED'] },
+    isDeleted: { $ne: true },
+  }).populate('guest', 'fullName mobileNumber email');
+
+  // Index bookings by roomId and roomNumber
+  const bookingsByRoom: { [key: string]: any[] } = {};
+  activeBookings.forEach((b: any) => {
+    const g = b.guest as any;
+    const guestName = g?.fullName || g?.name || b.guestName || 'Guest';
+
+    const bookingInfo = {
+      _id: b._id,
+      bookingNumber: b.bookingNumber,
+      status: b.status,
+      checkInDate: toISODateString(b.checkInDate),
+      checkOutDate: toISODateString(b.checkOutDate),
+      guestName,
+      guestPhone: g?.mobileNumber || b.guestPhone || '',
+    };
+
+    const keys: string[] = [];
+    if (b.room) keys.push(b.room.toString());
+    if (Array.isArray(b.rooms)) {
+      b.rooms.forEach((rId: any) => {
+        if (rId) keys.push(rId.toString());
+      });
+    }
+
+    const bRtId = b.roomType?._id?.toString() || b.roomType?.toString() || "";
+    if (b.roomNumber && (!b.room || keys.length === 0)) {
+      if (bRtId) keys.push(`num_${bRtId}_${b.roomNumber}`);
+      else keys.push(`num_${b.roomNumber}`);
+    }
+    if (Array.isArray(b.roomNumbers) && (!b.rooms || b.rooms.length === 0)) {
+      b.roomNumbers.forEach((rNum: any) => {
+        if (rNum) {
+          if (bRtId) keys.push(`num_${bRtId}_${rNum}`);
+          else keys.push(`num_${rNum}`);
+        }
+      });
+    }
+
+    keys.forEach((k) => {
+      if (!bookingsByRoom[k]) bookingsByRoom[k] = [];
+      bookingsByRoom[k].push(bookingInfo);
+    });
+  });
+
+  const enrichedRooms = rooms.map((r: any) => {
+    const rObj = r.toObject();
+    const rId = r._id.toString();
+    const rRtId = r.roomType?._id?.toString() || r.roomType?.toString() || "";
+    const rNumKey = rRtId ? `num_${rRtId}_${r.roomNumber}` : `num_${r.roomNumber}`;
+
+    const allRoomBookings = [
+      ...(bookingsByRoom[rId] || []),
+      ...((!bookingsByRoom[rId] || bookingsByRoom[rId].length === 0) ? (bookingsByRoom[rNumKey] || []) : []),
+    ].filter((v, i, a) => a.findIndex((t) => String(t.bookingNumber) === String(v.bookingNumber)) === i);
+
+    // 1. Current In-House / Today Status
+    const todayBooking = allRoomBookings.find(
+      (b) => b.status === 'CHECKED_IN' || isDateRangeOverlapping(todayStr, tomorrowStr, b.checkInDate, b.checkOutDate)
+    );
+
+    // 2. Overlapping bookings for the REQUESTED stay period [reqInStr, reqOutStr)
+    const overlappingBookings = allRoomBookings.filter((b) =>
+      isDateRangeOverlapping(reqInStr, reqOutStr, b.checkInDate, b.checkOutDate)
+    );
+
+    // 3. Future advance reservations (from today onward)
+    const futureBookings = allRoomBookings
+      .filter((b) => b.checkInDate >= todayStr)
+      .sort((a, b) => a.checkInDate.localeCompare(b.checkInDate));
+
+    const isMaintenance = (r.status as any) === 'MAINTENANCE' || (r.status as any) === 'BLOCKED' || (r.status as any) === 'OUT_OF_ORDER';
+    const isCleaning = r.status === 'CLEANING';
+
+    // A room is available for the requested dates if:
+    // - It is not under maintenance/blocked
+    // - It has ZERO overlapping bookings for the requested stay period [reqInStr, reqOutStr)
+    const isAvailableForDates = !isMaintenance && overlappingBookings.length === 0;
+
+    let dateStatus = 'AVAILABLE';
+    let overlapReason = '';
+    if (isMaintenance) {
+      dateStatus = r.status;
+    } else if (overlappingBookings.length > 0) {
+      const firstOverlap = overlappingBookings[0];
+      dateStatus = firstOverlap.status === 'CHECKED_IN' ? 'OCCUPIED' : 'RESERVED';
+      overlapReason = `Reserved from ${formatShortDate(firstOverlap.checkInDate)} to ${formatShortDate(firstOverlap.checkOutDate)} (${firstOverlap.guestName})`;
+    }
+
+    let advanceBookingSummary = '';
+    if (futureBookings.length > 0) {
+      advanceBookingSummary = `Reserved from ${formatShortDate(futureBookings[0].checkInDate)} to ${formatShortDate(futureBookings[0].checkOutDate)}`;
+    }
+
+    const statusToday = isMaintenance ? r.status : isCleaning ? 'CLEANING' : todayBooking ? 'OCCUPIED' : 'AVAILABLE';
+
+    return {
+      ...rObj,
+      // Dynamic status for requested stay dates
+      isAvailable: isAvailableForDates,
+      isAvailableForDates,
+      dateStatus,
+      overlapReason,
+      // Status for today's physical room view
+      statusToday,
+      status: isAvailableForDates ? 'AVAILABLE' : dateStatus,
+      actualDbStatus: r.status,
+      guestName: todayBooking ? todayBooking.guestName : (overlappingBookings[0]?.guestName || ''),
+      // Advance reservations info
+      advanceBookingSummary,
+      futureBookings,
+      requestedStayPeriod: {
+        checkInDate: reqInStr,
+        checkOutDate: reqOutStr,
+      },
+    };
+  });
+
+  return enrichedRooms;
+};
+
 // @desc    Search Available Rooms by Dates & Type
 // @route   GET /api/v1/receptionist/rooms/available
 export const getAvailableRooms = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    await resolveCleaningRooms(req.hotelId);
-    const { roomType, checkInDate, checkOutDate } = req.query;
-
-    const todayStr = toISODateString(new Date());
-    const tomorrowDate = new Date();
-    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-    const tomorrowStr = toISODateString(tomorrowDate);
-
-    // Normalize requested date boundaries
-    const reqInStr = checkInDate ? toISODateString(String(checkInDate)) : todayStr;
-    let reqOutStr = checkOutDate ? toISODateString(String(checkOutDate)) : '';
-    if (!reqOutStr || reqOutStr <= reqInStr) {
-      const dIn = new Date(reqInStr);
-      dIn.setDate(dIn.getDate() + 1);
-      reqOutStr = toISODateString(dIn);
-    }
-
-    const query: any = { hotel: req.hotelId, isActive: true, isDeleted: { $ne: true } };
-    if (roomType) query.roomType = roomType;
-
-    const rooms = await Room.find(query).populate('roomType').sort({ roomNumber: 1 });
-
-    // Lookup ALL active bookings (CONFIRMED, CHECKED_IN, PENDING, RESERVED) for this hotel
-    const activeBookings = await Booking.find({
-      hotel: req.hotelId,
-      status: { $nin: ['CANCELLED', 'CHECKED_OUT', 'NO_SHOW', 'VOID', 'REFUNDED'] },
-      isDeleted: { $ne: true },
-    }).populate('guest', 'fullName mobileNumber email');
-
-    // Index bookings by roomId and roomNumber
-    const bookingsByRoom: { [key: string]: any[] } = {};
-    activeBookings.forEach((b: any) => {
-      const g = b.guest as any;
-      const guestName = g?.fullName || g?.name || b.guestName || 'Guest';
-
-      const bookingInfo = {
-        _id: b._id,
-        bookingNumber: b.bookingNumber,
-        status: b.status,
-        checkInDate: toISODateString(b.checkInDate),
-        checkOutDate: toISODateString(b.checkOutDate),
-        guestName,
-        guestPhone: g?.mobileNumber || b.guestPhone || '',
-      };
-
-      const keys: string[] = [];
-      if (b.room) keys.push(b.room.toString());
-      if (Array.isArray(b.rooms)) {
-        b.rooms.forEach((rId: any) => {
-          if (rId) keys.push(rId.toString());
-        });
-      }
-      if (b.roomNumber) keys.push(`num_${b.roomNumber}`);
-      if (Array.isArray(b.roomNumbers)) {
-        b.roomNumbers.forEach((rNum: any) => {
-          if (rNum) keys.push(`num_${rNum}`);
-        });
-      }
-
-      keys.forEach((k) => {
-        if (!bookingsByRoom[k]) bookingsByRoom[k] = [];
-        bookingsByRoom[k].push(bookingInfo);
-      });
-    });
-
-    const enrichedRooms = rooms.map((r: any) => {
-      const rObj = r.toObject();
-      const rId = r._id.toString();
-      const rNumKey = `num_${r.roomNumber}`;
-
-      const allRoomBookings = [
-        ...(bookingsByRoom[rId] || []),
-        ...(bookingsByRoom[rNumKey] || []),
-      ].filter((v, i, a) => a.findIndex((t) => String(t.bookingNumber) === String(v.bookingNumber)) === i);
-
-      // 1. Current In-House / Today Status
-      const todayBooking = allRoomBookings.find(
-        (b) => b.status === 'CHECKED_IN' || isDateRangeOverlapping(todayStr, tomorrowStr, b.checkInDate, b.checkOutDate)
-      );
-
-      // 2. Overlapping bookings for the REQUESTED stay period [reqInStr, reqOutStr)
-      const overlappingBookings = allRoomBookings.filter((b) =>
-        isDateRangeOverlapping(reqInStr, reqOutStr, b.checkInDate, b.checkOutDate)
-      );
-
-      // 3. Future advance reservations (from today onward)
-      const futureBookings = allRoomBookings
-        .filter((b) => b.checkInDate >= todayStr)
-        .sort((a, b) => a.checkInDate.localeCompare(b.checkInDate));
-
-      const isMaintenance = (r.status as any) === 'MAINTENANCE' || (r.status as any) === 'BLOCKED' || (r.status as any) === 'OUT_OF_ORDER';
-      const isCleaning = r.status === 'CLEANING';
-
-      // A room is available for the requested dates if:
-      // - It is not under maintenance/blocked
-      // - It has ZERO overlapping bookings for the requested stay period [reqInStr, reqOutStr)
-      const isAvailableForDates = !isMaintenance && overlappingBookings.length === 0;
-
-      let dateStatus = 'AVAILABLE';
-      let overlapReason = '';
-      if (isMaintenance) {
-        dateStatus = r.status;
-      } else if (overlappingBookings.length > 0) {
-        const firstOverlap = overlappingBookings[0];
-        dateStatus = firstOverlap.status === 'CHECKED_IN' ? 'OCCUPIED' : 'RESERVED';
-        overlapReason = `Reserved from ${formatShortDate(firstOverlap.checkInDate)} to ${formatShortDate(firstOverlap.checkOutDate)} (${firstOverlap.guestName})`;
-      }
-
-      let advanceBookingSummary = '';
-      if (futureBookings.length > 0) {
-        advanceBookingSummary = `Reserved from ${formatShortDate(futureBookings[0].checkInDate)} to ${formatShortDate(futureBookings[0].checkOutDate)}`;
-      }
-
-      const statusToday = isMaintenance ? r.status : isCleaning ? 'CLEANING' : todayBooking ? 'OCCUPIED' : 'AVAILABLE';
-
-      return {
-        ...rObj,
-        // Dynamic status for requested stay dates
-        isAvailable: isAvailableForDates,
-        isAvailableForDates,
-        dateStatus,
-        overlapReason,
-        // Status for today's physical room view
-        statusToday,
-        status: isAvailableForDates ? 'AVAILABLE' : dateStatus,
-        actualDbStatus: r.status,
-        guestName: todayBooking ? todayBooking.guestName : (overlappingBookings[0]?.guestName || ''),
-        // Advance reservations info
-        advanceBookingSummary,
-        futureBookings,
-        requestedStayPeriod: {
-          checkInDate: reqInStr,
-          checkOutDate: reqOutStr,
-        },
-      };
-    });
-
+    const enrichedRooms = await fetchAvailableRoomsData(req.hotelId, req.query);
     res.status(200).json({ success: true, count: enrichedRooms.length, data: enrichedRooms });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get Combined Booking Room Options (Room Types + Available Rooms)
+// @route   GET /api/v1/receptionist/booking/room-options
+export const getBookingRoomOptions = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const [roomTypes, availableRooms] = await Promise.all([
+      RoomType.find({ hotel: req.hotelId, isDeleted: { $ne: true }, isActive: true }).sort({ createdAt: -1 }),
+      fetchAvailableRoomsData(req.hotelId, req.query),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        roomTypes,
+        availableRooms,
+        rooms: availableRooms,
+      },
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -608,6 +648,14 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
       mobileNumber,
       mobile,
       email,
+      address,
+      city,
+      state,
+      country,
+      nationality,
+      gender,
+      dateOfBirth,
+      dob,
       govtIdType,
       idType,
       govtIdNumber,
@@ -638,6 +686,14 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
     const guestEmail = email || guestPayload?.email || '';
     const guestIdType = govtIdType || idType || guestPayload?.govtIdType || guestPayload?.idType || 'AADHAAR';
     const guestIdNum = govtIdNumber || idNumber || guestPayload?.govtIdNumber || guestPayload?.idNumber || 'PENDING';
+
+    const guestAddress = address || guestPayload?.address || '';
+    const guestCity = city || guestPayload?.city || '';
+    const guestState = state || guestPayload?.state || '';
+    const guestCountry = country || guestPayload?.country || 'India';
+    const guestNationality = nationality || guestPayload?.nationality || 'Indian';
+    const guestGender = gender || guestPayload?.gender || 'Male';
+    const guestDob = dateOfBirth || dob || guestPayload?.dateOfBirth;
 
     const cleanGuestIdType = normalizeIdType(guestIdType);
     const reusePreviousId = req.body.reusePreviousId === true || req.body.reusePreviousId === 'true';
@@ -702,6 +758,13 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
       guest.isDeleted = false;
       if (guestName && guestName !== 'Walk-in Guest') guest.fullName = guestName;
       if (guestEmail) guest.email = guestEmail;
+      if (guestAddress) guest.address = guestAddress;
+      if (guestCity) guest.city = guestCity;
+      if (guestState) guest.state = guestState;
+      if (guestCountry) guest.country = guestCountry;
+      if (guestNationality) guest.nationality = guestNationality;
+      if (guestGender) guest.gender = guestGender;
+      if (guestDob) guest.dateOfBirth = guestDob;
 
       if (!guest.idProof) {
         guest.idProof = {
@@ -725,6 +788,13 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
         fullName: guestName || 'Walk-in Guest',
         mobileNumber: guestPhone || `999${Date.now().toString().slice(-7)}`,
         email: guestEmail || '',
+        gender: guestGender,
+        dateOfBirth: guestDob,
+        nationality: guestNationality,
+        address: guestAddress,
+        city: guestCity,
+        state: guestState,
+        country: guestCountry,
         idProof: {
           idType: cleanGuestIdType,
           idNumber: guestIdNum,
@@ -756,13 +826,15 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
       : roomId ? [roomId] : [];
 
     const sanitizedRoomIds = rawRoomIds
-      .map((r: any) => (typeof r === 'object' && r !== null ? (r._id || r.id) : r))
-      .filter((id: any) => id && mongoose.isValidObjectId(id));
+      .map((r: any) => (typeof r === 'object' && r !== null ? String(r._id || r.id) : String(r)))
+      .filter((id: any) => id && id !== 'undefined' && id !== 'null' && mongoose.isValidObjectId(id));
 
     let allocatedRooms: any[] = [];
     if (sanitizedRoomIds.length > 0) {
       allocatedRooms = await Room.find({ _id: { $in: sanitizedRoomIds }, hotel: req.hotelId }).populate('roomType');
-    } else if (roomNumber) {
+    }
+    
+    if (allocatedRooms.length === 0 && roomNumber) {
       const roomNumList = Array.isArray(roomNumber) 
         ? roomNumber 
         : String(roomNumber).split(',').map((s: string) => s.trim());
@@ -1455,13 +1527,27 @@ export const getGuestsList = async (req: AuthenticatedRequest, res: Response): P
       };
     });
 
-    const total = formattedGuests.length;
     let finalGuests = formattedGuests;
+
+    const filterStatus = String(req.query.status || req.query.type || '').toUpperCase();
+    if (filterStatus && filterStatus !== 'ALL') {
+      if (filterStatus === 'IN-HOUSE' || filterStatus === 'IN_HOUSE' || filterStatus === 'CHECKED_IN') {
+        finalGuests = formattedGuests.filter((g) => g.status === 'IN-HOUSE' || g.status === 'CHECKED_IN');
+      } else if (filterStatus === 'CHECKED_OUT' || filterStatus === 'DEPARTED') {
+        finalGuests = formattedGuests.filter((g) => g.status === 'CHECKED_OUT' || g.status === 'DEPARTED');
+      } else if (filterStatus === 'RESERVED' || filterStatus === 'CONFIRMED') {
+        finalGuests = formattedGuests.filter((g) => g.status === 'RESERVED' || g.status === 'CONFIRMED');
+      } else {
+        finalGuests = formattedGuests.filter((g) => g.status?.toUpperCase() === filterStatus);
+      }
+    }
+
+    const total = finalGuests.length;
 
     if (limit && Number(limit) > 0) {
       const pageNum = Number(page) || 1;
       const limitNum = Number(limit);
-      finalGuests = formattedGuests.slice((pageNum - 1) * limitNum, (pageNum - 1) * limitNum + limitNum);
+      finalGuests = finalGuests.slice((pageNum - 1) * limitNum, (pageNum - 1) * limitNum + limitNum);
     }
 
     res.status(200).json({
@@ -1623,10 +1709,13 @@ export const getGuestDetailsById = async (req: AuthenticatedRequest, res: Respon
       roomsDetail = rList.map((rm: any) => {
         const tariff = Number(rm.customPricePerNight) || Number(rm.pricePerNight) || Number((activeBooking.roomType as any)?.basePrice) || 3000;
         const nights = activeBooking.numberOfNights || 1;
+        const rtName = (typeof rm.roomType === 'object' && rm.roomType?.name) ? rm.roomType.name : ((activeBooking.roomType as any)?.name || rm.roomType || 'Standard Room');
+        const fl = rm.floor !== undefined && rm.floor !== null ? rm.floor : (parseInt(String(rm.roomNumber || ''), 10) >= 100 ? Math.floor(parseInt(String(rm.roomNumber || ''), 10) / 100) : 1);
         return {
           id: rm._id,
           roomNumber: rm.roomNumber,
-          roomType: (activeBooking.roomType as any)?.name || 'Standard Room',
+          roomType: rtName,
+          floor: fl,
           pricePerNight: tariff,
           numberOfNights: nights,
           roomTotal: tariff * nights,

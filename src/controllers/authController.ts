@@ -250,19 +250,27 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Verify password first
-    const isMatch = await user.matchPassword(password);
-    if (!isMatch) {
-      // If password does not match, check if account is locked
-      if (user.accountLockedUntil && user.accountLockedUntil > new Date()) {
-        const remainingMinutes = Math.ceil((user.accountLockedUntil.getTime() - Date.now()) / (60 * 1000));
+    // Check if account has a temporary lockout
+    if (user.accountLockedUntil) {
+      if (user.accountLockedUntil.getTime() <= Date.now()) {
+        // Lock period expired! Auto-clear lock & failed attempts count
+        user.accountLockedUntil = undefined;
+        user.failedLoginAttempts = 0;
+        await user.save();
+      } else {
+        // Account is currently locked
+        const remainingMin = Math.max(1, Math.ceil((user.accountLockedUntil.getTime() - Date.now()) / (60 * 1000)));
         res.status(403).json({
           success: false,
-          message: `Account temporarily locked due to multiple failed login attempts. Try again in ${remainingMinutes} minute(s) or reset password.`,
+          message: `Account temporarily locked due to failed attempts. Please try again in ${remainingMin} minute(s) or reset password.`,
         });
         return;
       }
+    }
 
+    // Verify password
+    const isMatch = await user.matchPassword(password);
+    if (!isMatch) {
       user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
       if (user.failedLoginAttempts >= 15) {
         user.accountLockedUntil = new Date(Date.now() + 1 * 60 * 1000); // 1 min lockout
