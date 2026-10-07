@@ -1486,11 +1486,11 @@ export const getGuestsList = async (req: AuthenticatedRequest, res: Response): P
           roomNumsList = [roomNumber];
         }
 
-        if (activeBooking.checkInDate) {
-          checkInStr = new Date(activeBooking.checkInDate).toLocaleDateString('en-IN');
+        if (activeBooking.actualCheckIn || activeBooking.checkInDate) {
+          checkInStr = new Date(activeBooking.actualCheckIn || activeBooking.checkInDate).toLocaleDateString('en-IN');
         }
-        if (activeBooking.checkOutDate) {
-          checkOutStr = new Date(activeBooking.checkOutDate).toLocaleDateString('en-IN');
+        if (activeBooking.actualCheckOut || activeBooking.checkOutDate) {
+          checkOutStr = new Date(activeBooking.actualCheckOut || activeBooking.checkOutDate).toLocaleDateString('en-IN');
         }
       }
 
@@ -1524,6 +1524,11 @@ export const getGuestsList = async (req: AuthenticatedRequest, res: Response): P
         }
       }
 
+      const rawInTime = activeBooking?.checkInTime || (activeBooking?.actualCheckIn ? `${String(new Date(activeBooking.actualCheckIn).getHours()).padStart(2, '0')}:${String(new Date(activeBooking.actualCheckIn).getMinutes()).padStart(2, '0')}` : (req.hotel?.settings?.checkInTime || '14:00'));
+      const rawOutTime = (activeBooking?.status === 'CHECKED_OUT' || activeBooking?.status === 'DEPARTED' || activeBooking?.actualCheckOut)
+        ? (activeBooking?.actualCheckOut ? `${String(new Date(activeBooking.actualCheckOut).getHours()).padStart(2, '0')}:${String(new Date(activeBooking.actualCheckOut).getMinutes()).padStart(2, '0')}` : activeBooking?.checkOutTime)
+        : (activeBooking?.checkOutTime || req.hotel?.settings?.checkOutTime || '12:00');
+
       return {
         ...gObj,
         name: gObj.fullName,
@@ -1537,6 +1542,10 @@ export const getGuestsList = async (req: AuthenticatedRequest, res: Response): P
         checkOutDate: checkOutStr,
         checkInDateRaw: activeBooking?.checkInDate || null,
         checkOutDateRaw: activeBooking?.checkOutDate || null,
+        checkInTime: rawInTime,
+        checkOutTime: rawOutTime,
+        actualCheckIn: activeBooking?.actualCheckIn || null,
+        actualCheckOut: activeBooking?.actualCheckOut || null,
         totalVisits: guestBookings.length || 1,
         activeBookingNumber: activeBooking?.bookingNumber || 'N/A',
         paymentStatus: guestPaymentStatus,
