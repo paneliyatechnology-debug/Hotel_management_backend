@@ -1244,6 +1244,7 @@ export const processCheckOut = async (req: AuthenticatedRequest, res: Response):
       dailyRoomRate = 0,
       gracePeriodMinutes = 10,
       paymentMethod = 'CASH',
+      checkOutTime,
     } = req.body;
 
     const booking = await Booking.findOne({ _id: req.params.id, hotel: req.hotelId })
@@ -1273,11 +1274,25 @@ export const processCheckOut = async (req: AuthenticatedRequest, res: Response):
       booking.totalAmount += lateFee;
     }
 
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const currentClockTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const finalCheckOutTime = checkOutTime && String(checkOutTime).trim()
+      ? String(checkOutTime).trim()
+      : currentClockTime;
+
     const paidNow = Number(settlementPaymentAmount) || 0;
     booking.paidAmount += paidNow;
     booking.dueAmount = Math.max(0, booking.totalAmount - booking.paidAmount);
     booking.status = 'CHECKED_OUT';
-    booking.actualCheckOut = new Date();
+    booking.actualCheckOut = now;
+    booking.checkOutTime = finalCheckOutTime;
+
+    // If client checked out before scheduled checkOutDate, align checkOutDate to actual checkout date
+    if (!booking.checkOutDate || new Date(booking.checkOutDate) > now) {
+      booking.checkOutDate = now;
+    }
+
     await booking.save();
 
     // Mark All Allocated Rooms for CLEANING with 15-minute housekeeping turnaround timer
@@ -1324,11 +1339,11 @@ export const processCheckOut = async (req: AuthenticatedRequest, res: Response):
         hotelGst: req.hotel?.gstNumber,
         receiptNumber: receiptNumber || `INV-${booking.bookingNumber}`,
         bookingNumber: booking.bookingNumber,
-        guestName: guestObj.fullName || 'Guest',
+        guestName: guestObj?.fullName || 'Guest',
         roomNumber: roomObj?.roomNumber || '101',
         roomType: 'Room Stay',
         checkIn: new Date(booking.checkInDate).toLocaleDateString('en-IN'),
-        checkOut: new Date().toLocaleDateString('en-IN'),
+        checkOut: `${new Date(booking.actualCheckOut || now).toLocaleDateString('en-IN')} ${finalCheckOutTime}`.trim(),
         amount: booking.totalAmount,
         paymentMethod: paymentMethod || 'CASH',
         paymentType: 'Full Checkout Settlement',
@@ -1344,7 +1359,12 @@ export const processCheckOut = async (req: AuthenticatedRequest, res: Response):
         action: 'GUEST_CHECKED_OUT',
         module: 'BOOKINGS',
         entityId: booking.bookingNumber,
-        newValue: { totalAmount: booking.totalAmount, roomStatus: 'CLEANING' },
+        newValue: {
+          totalAmount: booking.totalAmount,
+          roomStatus: 'CLEANING',
+          actualCheckOut: booking.actualCheckOut,
+          checkOutTime: booking.checkOutTime,
+        },
       });
     }
 
@@ -1353,6 +1373,14 @@ export const processCheckOut = async (req: AuthenticatedRequest, res: Response):
       bookingNumber: booking.bookingNumber,
       roomNumber: roomObj?.roomNumber,
       guestName: guestObj?.fullName,
+      actualCheckOut: booking.actualCheckOut,
+      checkOutTime: booking.checkOutTime,
+    });
+    emitToHotel(req.hotelId, 'BOOKING_UPDATED', {
+      bookingId: booking._id,
+      status: 'CHECKED_OUT',
+      actualCheckOut: booking.actualCheckOut,
+      checkOutTime: booking.checkOutTime,
     });
     emitToHotel(req.hotelId, 'ROOM_UPDATED', {
       roomId: booking.room,
@@ -1379,6 +1407,9 @@ export const processCheckOut = async (req: AuthenticatedRequest, res: Response):
         dueRemaining: booking.dueAmount,
         roomStatus: 'CLEANING',
         receiptNumber,
+        actualCheckOut: booking.actualCheckOut,
+        checkOutTime: booking.checkOutTime,
+        checkOutDate: booking.checkOutDate,
       },
     });
   } catch (error: any) {
@@ -1510,6 +1541,8 @@ export const getGuestsList = async (req: AuthenticatedRequest, res: Response): P
         checkOutDate: checkOutStr,
         checkInDateRaw: activeBooking?.checkInDate || null,
         checkOutDateRaw: activeBooking?.checkOutDate || null,
+        checkOutTime: activeBooking?.checkOutTime || null,
+        actualCheckOut: activeBooking?.actualCheckOut || null,
         totalVisits: guestBookings.length || 1,
         activeBookingNumber: activeBooking?.bookingNumber || 'N/A',
         paymentStatus: guestPaymentStatus,
@@ -1814,7 +1847,7 @@ export const getGuestDetailsById = async (req: AuthenticatedRequest, res: Respon
       if (activeBooking.status === 'CHECKED_OUT' || activeBooking.actualCheckOut) {
         timeline.push({
           title: 'Checked Out',
-          description: 'Folio closed and checkout finalized.',
+          description: `Folio closed and checkout finalized${activeBooking.checkOutTime ? ` at ${activeBooking.checkOutTime}` : ''}.`,
           timestamp: activeBooking.actualCheckOut || activeBooking.checkOutDate,
           icon: 'DoneAll',
           status: 'completed',
@@ -1977,6 +2010,8 @@ export const getBookingsList = async (req: AuthenticatedRequest, res: Response):
         roomNumber: roomObj ? roomObj.roomNumber : 'N/A',
         checkInDate: checkInDateStr,
         checkOutDate: checkOutDateStr,
+        checkOutTime: bObj.checkOutTime || '12:00',
+        actualCheckOut: bObj.actualCheckOut || null,
         posCharges: chargesByBooking[b._id.toString()] || [],
       };
     });

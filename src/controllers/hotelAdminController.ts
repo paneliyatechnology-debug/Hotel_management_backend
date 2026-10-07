@@ -823,10 +823,21 @@ export const updateRoomStatus = async (req: AuthenticatedRequest, res: Response)
         isDeleted: { $ne: true },
       });
       if (activeBooking) {
+        const now = new Date();
+        const pad = (n: number) => String(n).padStart(2, '0');
         activeBooking.status = 'CHECKED_OUT';
-        activeBooking.actualCheckOut = new Date();
+        activeBooking.actualCheckOut = now;
+        activeBooking.checkOutTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        if (!activeBooking.checkOutDate || new Date(activeBooking.checkOutDate) > now) {
+          activeBooking.checkOutDate = now;
+        }
         await activeBooking.save();
-        emitToHotel(req.hotelId, 'BOOKING_UPDATED', { bookingId: activeBooking._id, status: 'CHECKED_OUT' });
+        emitToHotel(req.hotelId, 'BOOKING_UPDATED', {
+          bookingId: activeBooking._id,
+          status: 'CHECKED_OUT',
+          actualCheckOut: now,
+          checkOutTime: activeBooking.checkOutTime,
+        });
       }
     }
 
@@ -1252,9 +1263,12 @@ export const deleteRoomType = async (req: AuthenticatedRequest, res: Response): 
 
     // 3. Auto Check-Out active resident guests (preserve guest profiles & transaction ledgers in DB)
     const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const autoTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
     for (const b of activeBookings) {
       b.status = 'CHECKED_OUT';
       b.actualCheckOut = now;
+      b.checkOutTime = autoTime;
       if (!b.checkOutDate || new Date(b.checkOutDate) > now) {
         b.checkOutDate = now;
       }
