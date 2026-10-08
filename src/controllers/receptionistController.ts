@@ -204,9 +204,12 @@ export const fetchAvailableRoomsData = async (hotelId: any, queryParams: any) =>
       ...((!bookingsByRoom[rId] || bookingsByRoom[rId].length === 0) ? (bookingsByRoom[rNumKey] || []) : []),
     ].filter((v, i, a) => a.findIndex((t) => String(t.bookingNumber) === String(v.bookingNumber)) === i);
 
+    // Active checked-in booking (guest physically occupying the room)
+    const activeCheckedInBooking = allRoomBookings.find((b) => b.status === 'CHECKED_IN');
+
     // 1. Current In-House / Today Status
-    const todayBooking = allRoomBookings.find(
-      (b) => b.status === 'CHECKED_IN' || isDateRangeOverlapping(todayStr, tomorrowStr, b.checkInDate, b.checkOutDate)
+    const todayBooking = activeCheckedInBooking || allRoomBookings.find(
+      (b) => isDateRangeOverlapping(todayStr, tomorrowStr, b.checkInDate, b.checkOutDate)
     );
 
     // 2. Overlapping bookings for the REQUESTED stay period [reqInStr, reqOutStr)
@@ -222,15 +225,21 @@ export const fetchAvailableRoomsData = async (hotelId: any, queryParams: any) =>
     const isMaintenance = (r.status as any) === 'MAINTENANCE' || (r.status as any) === 'BLOCKED' || (r.status as any) === 'OUT_OF_ORDER';
     const isCleaning = r.status === 'CLEANING';
 
-    // A room is available for the requested dates if:
-    // - It is not under maintenance/blocked
-    // - It has ZERO overlapping bookings for the requested stay period [reqInStr, reqOutStr)
-    const isAvailableForDates = !isMaintenance && overlappingBookings.length === 0;
+    // A room is available ONLY if:
+    // - Not under maintenance/blocked/cleaning
+    // - No active CHECKED_IN guest currently occupying the room (must be manually checked out by receptionist!)
+    // - No overlapping bookings for requested dates
+    const isAvailableForDates = !isMaintenance && !isCleaning && !activeCheckedInBooking && overlappingBookings.length === 0;
 
     let dateStatus = 'AVAILABLE';
     let overlapReason = '';
     if (isMaintenance) {
       dateStatus = r.status;
+    } else if (isCleaning) {
+      dateStatus = 'CLEANING';
+    } else if (activeCheckedInBooking) {
+      dateStatus = 'OCCUPIED';
+      overlapReason = `Occupied by checked-in guest: ${activeCheckedInBooking.guestName}`;
     } else if (overlappingBookings.length > 0) {
       const firstOverlap = overlappingBookings[0];
       dateStatus = firstOverlap.status === 'CHECKED_IN' ? 'OCCUPIED' : 'RESERVED';
@@ -242,7 +251,8 @@ export const fetchAvailableRoomsData = async (hotelId: any, queryParams: any) =>
       advanceBookingSummary = `Reserved from ${formatShortDate(futureBookings[0].checkInDate)} to ${formatShortDate(futureBookings[0].checkOutDate)}`;
     }
 
-    const statusToday = isMaintenance ? r.status : isCleaning ? 'CLEANING' : todayBooking ? 'OCCUPIED' : 'AVAILABLE';
+    const statusToday = isMaintenance ? r.status : isCleaning ? 'CLEANING' : activeCheckedInBooking ? 'OCCUPIED' : todayBooking ? 'OCCUPIED' : 'AVAILABLE';
+    const finalStatus = isMaintenance ? r.status : isCleaning ? 'CLEANING' : activeCheckedInBooking ? 'OCCUPIED' : dateStatus;
 
     return {
       ...rObj,
@@ -253,9 +263,9 @@ export const fetchAvailableRoomsData = async (hotelId: any, queryParams: any) =>
       overlapReason,
       // Status for today's physical room view
       statusToday,
-      status: isAvailableForDates ? 'AVAILABLE' : dateStatus,
+      status: finalStatus,
       actualDbStatus: r.status,
-      guestName: todayBooking ? todayBooking.guestName : (overlappingBookings[0]?.guestName || ''),
+      guestName: activeCheckedInBooking ? activeCheckedInBooking.guestName : todayBooking ? todayBooking.guestName : (overlappingBookings[0]?.guestName || ''),
       // Advance reservations info
       advanceBookingSummary,
       futureBookings,
@@ -699,6 +709,7 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
 
     const cleanGuestIdType = normalizeIdType(guestIdType);
     const reusePreviousId = req.body.reusePreviousId === true || req.body.reusePreviousId === 'true';
+    const rawGuestSignature = req.body.signature || req.body.guestSignature || req.body.signatureData || '';
 
     // Cloudinary ID Proofs upload for Main Guest
     let uploadedFrontImage = req.body.frontImage || '';
@@ -783,6 +794,10 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
         if (uploadedBackImage) guest.idProof.backImage = uploadedBackImage;
         if (guestIdNum && guestIdNum !== 'PENDING') guest.idProof.verificationStatus = 'VERIFIED';
       }
+      if (rawGuestSignature) {
+        guest.signature = rawGuestSignature;
+        guest.signatureDate = new Date();
+      }
       await guest.save();
     } else {
       guest = await Guest.create({
@@ -797,6 +812,8 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
         city: guestCity,
         state: guestState,
         country: guestCountry,
+        signature: rawGuestSignature || '',
+        signatureDate: rawGuestSignature ? new Date() : undefined,
         idProof: {
           idType: cleanGuestIdType,
           idNumber: guestIdNum,
@@ -1041,6 +1058,8 @@ export const createBookingOrCheckIn = async (req: AuthenticatedRequest, res: Res
       totalAmount,
       paidAmount: advancePaid,
       dueAmount,
+      guestSignature: rawGuestSignature || '',
+      guestSignedAt: rawGuestSignature ? new Date() : undefined,
       status: shouldInstantCheckIn ? 'CHECKED_IN' : 'CONFIRMED',
       specialRequests,
     });
