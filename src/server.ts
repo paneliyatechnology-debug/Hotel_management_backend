@@ -101,6 +101,15 @@ app.get('/', (req: Request, res: Response) => {
 
 const PORT: number = Number(process.env.PORT) || 5000;
 
+httpServer.on('error', (err: any) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is already in use! Please kill the process using port ${PORT} or check running background tasks.`);
+    process.exit(1);
+  } else {
+    console.error('Server error:', err);
+  }
+});
+
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Multi-Tenant Hotel Management Server & Socket.io running on port ${PORT}`);
 });
