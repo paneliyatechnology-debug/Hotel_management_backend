@@ -22,7 +22,7 @@ import {
   getDailyCollectionsReconciliation,
   settleCashDrawerHandover,
 } from '../controllers/hotelAdminController';
-import { getPaymentsLedger, recordDirectPayment, getGuestsList, getGuestDetailsById } from '../controllers/receptionistController';
+import { getPaymentsLedger, recordDirectPayment, getGuestsList, getGuestDetailsById, getGuestPdfUrl } from '../controllers/receptionistController';
 import {
   authenticateUser,
   requireRole,
@@ -43,6 +43,8 @@ router.use(
 router.get('/dashboard', getHotelAdminDashboard);
 router.get('/revenue-details', getRevenueDetails);
 router.get('/guests', getGuestsList);
+router.get('/guests/:id/pdf', getGuestPdfUrl);
+router.get('/guests/:id/folio-pdf', getGuestPdfUrl);
 router.get('/guests/:id', getGuestDetailsById);
 
 // Room Types & Rooms

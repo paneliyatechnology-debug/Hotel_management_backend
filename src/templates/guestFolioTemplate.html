@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Guest Stay Folio - {{GUEST_NAME}} - #{{BOOKING_NUMBER}}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    @page {
+      size: A4 portrait;
+      margin: 10mm 12mm 10mm 12mm;
+    }
+
+    body {
+      background-color: #FFFFFF;
+      color: #0F172A;
+      font-size: 11px;
+      line-height: 1.45;
+      width: 100%;
+    }
+
+    .page {
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .page-break {
+      page-break-before: always !important;
+      break-before: page !important;
+      margin-top: 10px;
+    }
+
+    .pdf-section {
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    tr {
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+
+    th {
+      background: #0F766E !important;
+      color: #FFFFFF !important;
+      font-weight: 800;
+      font-size: 9.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    td {
+      font-size: 10.5px;
+    }
+
+    .balance-settled {
+      color: #059669;
+    }
+
+    .balance-due {
+      color: #DC2626;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ================= PAGE 1 ================= -->
+  <div class="page page-1">
+    <!-- Top Branded Executive Header -->
+    <div class="pdf-section" style="background: linear-gradient(135deg, #092622 0%, #0F766E 50%, #14B8A6 100%); border-radius: 14px; padding: 15px 20px; color: #FFFFFF; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 14px rgba(15, 118, 110, 0.2);">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div style="width: 46px; height: 46px; background: #FFFFFF; border: 2px solid rgba(255,255,255,0.85); border-radius: 12px; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 4px; flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+          <img src="{{HOTEL_LOGO_SRC}}" alt="{{HOTEL_NAME}}" style="width: 100%; height: 100%; object-fit: contain;" />
+        </div>
+        <div>
+          <div style="font-size: 18.5px; font-weight: 900; color: #FFFFFF; letter-spacing: -0.4px;">{{HOTEL_NAME}}</div>
+          <div style="font-size: 10px; color: rgba(255, 255, 255, 0.9); font-weight: 600; margin-top: 2px;">
+            📍 {{HOTEL_ADDRESS}} &bull; 📞 {{HOTEL_PHONE}}
+          </div>
+          <div style="display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; padding: 2px 8px; border-radius: 6px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.3px; background: rgba(255,255,255,0.15);">
+            <span style="width: 6px; height: 6px; background: #4ADE80; border-radius: 50%; display: inline-block;"></span>
+            GSTIN: <strong>{{HOTEL_GSTIN}}</strong> &bull; Verified Property
+          </div>
+        </div>
+      </div>
+
+      <div style="text-align: right; padding: 4px 8px;">
+        <div style="font-size: 14px; font-weight: 900; color: #FFFFFF; text-transform: uppercase; letter-spacing: 1px;">GUEST STAY FOLIO</div>
+        <div style="font-size: 12px; font-weight: 800; color: #99F6E4; margin-top: 2px; font-family: monospace;">#{{BOOKING_NUMBER}}</div>
+        <div style="font-size: 9px; color: rgba(255, 255, 255, 0.85); font-weight: 700; margin-top: 2px;">Date: {{FOLIO_DATE_TIME}}</div>
+      </div>
+    </div>
+
+    <!-- 2-Column Guest Profile & Stay Allocation Cards -->
+    <div class="pdf-section" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+      <!-- Primary Guest Profile Card -->
+      <div style="background: #F8FAFC; border: 1.5px solid #E2E8F0; border-radius: 12px; padding: 11px 14px; position: relative; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.02);">
+        <div style="position: absolute; top: 0; left: 0; right: 0; height: 3.5px; background: #0F766E;"></div>
+        <div style="font-size: 9.5px; font-weight: 900; color: #0F766E; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+          <span>👤</span> PRIMARY GUEST PROFILE
+        </div>
+        <div style="font-size: 13px; font-weight: 900; color: #0F172A; margin-bottom: 3px;">{{GUEST_NAME}}</div>
+        <div style="font-size: 10px; color: #475569; margin-bottom: 2px;">
+          📞 Phone: <strong style="color:#0F172A;">{{GUEST_PHONE}}</strong> &bull; ✉️ {{GUEST_EMAIL}}
+        </div>
+        <div style="font-size: 10px; color: #475569; margin-bottom: 2px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
+          <span>🛡️ Govt ID:</span>
+          <strong style="color:#0F172A; font-family: monospace;">{{GOVT_ID_TYPE}}: {{GOVT_ID_NUMBER}}</strong>
+          <span style="display: inline-block; color: #15803D; font-size: 9px; font-weight: 800;">✓ Verified</span>
+        </div>
+        <div style="font-size: 10px; color: #475569;">
+          🏠 Address: <span style="color:#0F172A;">{{GUEST_ADDRESS}}</span>
+        </div>
+      </div>
+
+      <!-- Stay Allocation Card -->
+      <div style="background: #F8FAFC; border: 1.5px solid #E2E8F0; border-radius: 12px; padding: 11px 14px; position: relative; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.02);">
+        <div style="position: absolute; top: 0; left: 0; right: 0; height: 3.5px; background: #10B981;"></div>
+        <div style="font-size: 9.5px; font-weight: 900; color: #10B981; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+          <span>🏨</span> STAY &amp; ROOM ALLOCATION
+        </div>
+        <div style="font-size: 13px; font-weight: 900; color: #0F172A; margin-bottom: 3px;">
+          Room #{{ROOM_NUMBER}} &bull; <span style="font-size: 11px; color: #0F766E; font-weight: 800;">{{ROOM_TYPE_NAME}}</span>
+        </div>
+        <div style="font-size: 10px; color: #475569; margin-bottom: 2px;">
+          📥 Check-In: <strong style="color:#0F172A;">{{CHECK_IN_FORMATTED}}</strong>
+        </div>
+        <div style="font-size: 10px; color: #475569; margin-bottom: 2px;">
+          📤 Check-Out: <strong style="color:#0F172A;">{{CHECK_OUT_FORMATTED}}</strong>
+        </div>
+        <div style="font-size: 10px; color: #475569; display: flex; align-items: center; gap: 6px;">
+          <span>⏱️ Duration: <strong>{{NIGHTS_LABEL}}</strong></span>
+          <span>&bull;</span>
+          <span>Status: <strong style="color:#059669;">{{GUEST_STATUS}}</strong></span>
+        </div>
+        {{LATE_CHECKOUT_BANNER}}
+      </div>
+    </div>
+
+    <!-- Accompanying Members Section (if any) -->
+    {{ACCOMPANYING_MEMBERS_SECTION}}
+
+    <!-- Itemized Room Tariff Breakdown Table -->
+    <div class="pdf-section" style="margin-bottom: 12px;">
+      <div style="font-size: 10.5px; font-weight: 900; color: #0F172A; text-transform: uppercase; margin-bottom: 5px; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;">
+        <span>📋</span> ITEMIZED ROOM TARIFF, TAXES &amp; EXTRA CHARGES BREAKDOWN
+      </div>
+      <table style="width: 100%; border: 1px solid #CBD5E1; border-radius: 8px; overflow: hidden;">
+        <thead>
+          <tr style="background: #0F766E; color: #FFFFFF;">
+            <th style="padding: 7px 6px; text-align: center; width: 28px;">#</th>
+            <th style="padding: 7px 8px; text-align: left;">Description of Service / Tariff Charge</th>
+            <th style="padding: 7px 6px; text-align: center; width: 60px;">HSN/SAC</th>
+            <th style="padding: 7px 6px; text-align: center; width: 65px;">Qty/Nights</th>
+            <th style="padding: 7px 8px; text-align: right; width: 68px;">Rate (₹)</th>
+            <th style="padding: 7px 8px; text-align: right; width: 78px;">Taxable (₹)</th>
+            <th style="padding: 7px 6px; text-align: center; width: 55px;">GST Rate</th>
+            <th style="padding: 7px 8px; text-align: right; width: 72px;">Tax Amount</th>
+            <th style="padding: 7px 8px; text-align: right; width: 80px;">Total (₹)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{ROOM_TARIFF_ROWS}}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Payment Transaction History Ledger Table -->
+    <div class="pdf-section" style="margin-bottom: 6px;">
+      <div style="font-size: 10.5px; font-weight: 900; color: #0F172A; text-transform: uppercase; margin-bottom: 5px; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;">
+        <span>💳</span> PAYMENT TRANSACTION HISTORY LEDGER ({{PAYMENT_LEDGER_COUNT}})
+      </div>
+      <table style="width: 100%; border: 1px solid #E2E8F0; border-radius: 8px; overflow: hidden;">
+        <thead>
+          <tr style="background: #0F766E; color: #FFFFFF;">
+            <th style="padding: 6.5px 7px; text-align: center; width: 28px;">#</th>
+            <th style="padding: 6.5px 8px; text-align: left;">Receipt / Txn ID</th>
+            <th style="padding: 6.5px 8px; text-align: left;">Date &amp; Time</th>
+            <th style="padding: 6.5px 8px; text-align: left;">Stage</th>
+            <th style="padding: 6.5px 8px; text-align: left;">Method</th>
+            <th style="padding: 6.5px 8px; text-align: right;">Amount (₹)</th>
+            <th style="padding: 6.5px 8px; text-align: center; width: 80px;">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{PAYMENT_LEDGER_ROWS}}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ================= PAGE 2 ================= -->
+  <div class="page page-2 page-break">
+    <!-- Page 2 Continuation Top Header -->
+    <div class="pdf-section" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #0F766E; padding-bottom: 6px; margin-bottom: 12px; font-size: 10px; color: #0F766E; font-weight: 800;">
+      <div style="letter-spacing: 0.5px; text-transform: uppercase;">
+        GUEST FOLIO {{GUEST_NAME_UPPER}} {{BOOKING_NUMBER}} (CONTINUATION)
+      </div>
+      <div style="color: #64748B; font-weight: 700;">Page 2 of 2</div>
+    </div>
+
+    <!-- Financial Settlement Summary & Stay Folio Policy Dual Grid -->
+    <div class="pdf-section" style="display: grid; grid-template-columns: 1fr 340px; gap: 12px; margin-bottom: 14px; align-items: start;">
+      <!-- Left: Stay Notes & Rules -->
+      <div style="background: #F8FAFC; border: 1.5px solid #E2E8F0; border-radius: 12px; padding: 12px 14px; font-size: 9.5px; color: #475569; line-height: 1.55;">
+        <div style="font-weight: 900; color: #0F172A; text-transform: uppercase; margin-bottom: 5px; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;">
+          <span>📌</span> STAY FOLIO &amp; BILLING POLICY
+        </div>
+        <ul style="margin: 0; padding-left: 15px;">
+          <li style="margin-bottom: 3px;">This stay folio reflects complete itemized room and point-of-sale consumption for this guest cycle.</li>
+          <li style="margin-bottom: 3px;">Standard check-out is 11:00 AM. Key cards must be returned to the Front Desk at final settlement.</li>
+          <li>All room tariff and extra charges are subject to statutory GST regulations under SAC 996311.</li>
+        </ul>
+      </div>
+
+      <!-- Right: Financial Ledger Card -->
+      <div style="background: #FFFFFF; border: 2px solid #CCFBF1; border-radius: 12px; padding: 12px 15px; box-shadow: 0 4px 14px rgba(15, 118, 110, 0.08);">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 10px; color: #475569;">
+          <span>Room Base Tariff:</span>
+          <span style="font-weight: 800; color: #0F172A;">₹{{TAXABLE_AMOUNT}}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 10px; color: #475569;">
+          <span>GST (CGST ₹{{CGST_AMOUNT}} + SGST ₹{{SGST_AMOUNT}}):</span>
+          <span style="font-weight: 800; color: #0F172A;">₹{{TOTAL_GST_AMOUNT}}</span>
+        </div>
+        {{EXTRA_POS_ROW}}
+        {{LATE_CHECKOUT_ROW}}
+        <div style="border-top: 1.5px dashed #CBD5E1; margin: 6px 0;"></div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px; font-weight: 900; color: #0F172A;">
+          <span>Grand Total Payable:</span>
+          <span style="color: #059669; font-size: 14px;">₹{{GRAND_TOTAL_AMOUNT}}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 11px; font-weight: 800; color: #059669;">
+          <span>Total Payments Received:</span>
+          <span>−₹{{PAID_AMOUNT}}</span>
+        </div>
+        <div class="{{BALANCE_CLASS}}" style="display: flex; justify-content: space-between; padding-top: 4px; border-top: 1.5px solid #E2E8F0; margin-top: 4px; font-size: 12px; font-weight: 900;">
+          <span>Outstanding Balance:</span>
+          <span>₹{{OUTSTANDING_BALANCE}}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Official Authorization Footer -->
+    <div class="pdf-section" style="display: flex; justify-content: space-between; align-items: flex-end; padding-top: 10px; border-top: 1.5px solid #E2E8F0; font-size: 10px; color: #64748B; margin-bottom: 14px;">
+      <div>
+        <div style="font-weight: 800; color: #0F172A; font-size: 11px;">Thank you for choosing {{HOTEL_NAME}}!</div>
+        <div style="font-size: 9px; color: #94A3B8; margin-top: 1px;">Official Guest Stay Folio &bull; Verified and Digitally Sealed by PMS Front Desk</div>
+      </div>
+      <div style="text-align: right; width: 200px;">
+        <div style="border-bottom: 1.5px dashed #94A3B8; margin-bottom: 4px; height: 26px;"></div>
+        <div style="font-size: 9.5px; font-weight: 800; color: #0F172A; text-transform: uppercase;">Guest / Cashier Signature</div>
+      </div>
+    </div>
+
+    <!-- ================= DEDICATED GOVT ID & AADHAAR PROOFS SECTION ================= -->
+    {{ID_PROOFS_SECTION}}
+  </div>
+
+</body>
+</html>

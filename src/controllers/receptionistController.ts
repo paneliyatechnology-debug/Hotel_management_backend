@@ -7,6 +7,8 @@ import Guest from '../models/Guest';
 import Booking from '../models/Booking';
 import BookingCharge from '../models/BookingCharge';
 import Payment from '../models/Payment';
+import Hotel from '../models/Hotel';
+import { generateGuestFolioPdf } from '../services/folioPdfService';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { queueEmail } from '../queues/emailQueue';
 import logAuditAction from '../utils/auditLogger';
@@ -1871,6 +1873,212 @@ export const getGuestDetailsById = async (req: AuthenticatedRequest, res: Respon
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// @desc    Generate Guest Stay Folio PDF and return only the PDF URL
+// @route   GET /api/v1/receptionist/guests/:id/pdf
+// @route   GET /api/v1/receptionist/guests/:id/folio-pdf
+export const getGuestPdfUrl = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const guestId = req.params.id;
+    const hotelId = req.hotelId || req.user?.hotel;
+
+    if (!guestId) {
+      res.status(400).json({ success: false, message: 'Guest ID is required.' });
+      return;
+    }
+
+    let guest: any = null;
+    let fallbackBooking: any = null;
+    const isMongoId = mongoose.isValidObjectId(guestId);
+
+    if (isMongoId) {
+      // 1. Try finding guest by ID and hotel
+      guest = await Guest.findOne({ _id: guestId, hotel: hotelId, isDeleted: { $ne: true } });
+
+      // 2. If not found by hotel, check if guest exists generally
+      if (!guest) {
+        guest = await Guest.findOne({ _id: guestId, isDeleted: { $ne: true } });
+      }
+
+      // 3. If still not found, check if guestId is actually a Booking ID
+      if (!guest) {
+        const b = await Booking.findOne({ _id: guestId, hotel: hotelId })
+          .populate('guest')
+          .populate('room')
+          .populate('rooms')
+          .populate('roomType');
+
+        if (b) {
+          fallbackBooking = b;
+          if (b.guest && typeof b.guest === 'object') {
+            guest = b.guest;
+          }
+        }
+      }
+    }
+
+    // 4. If still not found, try finding by phone number or email
+    if (!guest) {
+      guest = await Guest.findOne({
+        hotel: hotelId,
+        isDeleted: { $ne: true },
+        $or: [{ mobileNumber: guestId }, { email: guestId }],
+      });
+    }
+
+    // 5. If still no guest document, but we have a booking
+    if (!guest) {
+      if (!fallbackBooking && isMongoId) {
+        fallbackBooking = await Booking.findOne({ _id: guestId }).populate('room rooms roomType');
+      }
+      if (!fallbackBooking) {
+        fallbackBooking = await Booking.findOne({
+          hotel: hotelId,
+          $or: [{ guestPhone: guestId }, { guestEmail: guestId }],
+        }).populate('room rooms roomType');
+      }
+
+      if (fallbackBooking) {
+        guest = {
+          _id: fallbackBooking.guest?._id || fallbackBooking._id,
+          fullName: fallbackBooking.guestName || (fallbackBooking.guest as any)?.fullName || 'Walk-in Guest',
+          mobileNumber: fallbackBooking.guestPhone || (fallbackBooking.guest as any)?.mobileNumber || '',
+          email: fallbackBooking.guestEmail || (fallbackBooking.guest as any)?.email || '',
+          address: fallbackBooking.guestAddress || '',
+          city: (fallbackBooking.guest as any)?.city || '',
+          state: (fallbackBooking.guest as any)?.state || '',
+          idProof: (fallbackBooking.guest as any)?.idProof || fallbackBooking.idProof || {
+            frontImage: fallbackBooking.frontImage || '',
+            backImage: fallbackBooking.backImage || '',
+          },
+          totalVisits: 1,
+          totalSpent: fallbackBooking.totalAmount || 0,
+          status: fallbackBooking.status === 'CHECKED_IN' ? 'IN-HOUSE' : fallbackBooking.status,
+          createdAt: fallbackBooking.createdAt,
+        };
+      }
+    }
+
+    if (!guest) {
+      res.status(404).json({ success: false, message: 'Guest profile not found.' });
+      return;
+    }
+
+    const guestSearchIds = [guest._id];
+    if (fallbackBooking && fallbackBooking._id) {
+      guestSearchIds.push(fallbackBooking._id);
+    }
+
+    const bookingOrConditions: any[] = [
+      { guest: { $in: guestSearchIds } },
+      { _id: { $in: guestSearchIds } },
+    ];
+    if (guest.mobileNumber) {
+      bookingOrConditions.push({ guestPhone: guest.mobileNumber });
+    }
+
+    const allBookings = await Booking.find({
+      hotel: hotelId,
+      isDeleted: { $ne: true },
+      $or: bookingOrConditions,
+    })
+      .populate('room', 'roomNumber floor status customPricePerNight pricePerNight')
+      .populate('rooms', 'roomNumber floor status customPricePerNight pricePerNight')
+      .populate('roomType', 'name basePrice gstRate')
+      .sort({ createdAt: -1 });
+
+    const activeBooking =
+      allBookings.find((b) => b.status === 'CHECKED_IN') ||
+      allBookings.find((b) => b.status === 'CONFIRMED') ||
+      fallbackBooking ||
+      allBookings[0] || null;
+
+    let roomsDetail: any[] = [];
+    if (activeBooking) {
+      const rList = Array.isArray(activeBooking.rooms) && activeBooking.rooms.length > 0
+        ? activeBooking.rooms
+        : activeBooking.room ? [activeBooking.room] : [];
+
+      roomsDetail = rList.map((rm: any) => {
+        const tariff = Number(rm.customPricePerNight) || Number(rm.pricePerNight) || Number((activeBooking.roomType as any)?.basePrice) || 3000;
+        const nights = activeBooking.numberOfNights || 1;
+        const rtName = (typeof rm.roomType === 'object' && rm.roomType?.name) ? rm.roomType.name : ((activeBooking.roomType as any)?.name || rm.roomType || 'Standard Room');
+        return {
+          id: rm._id,
+          roomNumber: rm.roomNumber,
+          roomType: rtName,
+          pricePerNight: tariff,
+          numberOfNights: nights,
+          roomTotal: tariff * nights,
+        };
+      });
+    }
+
+    const paymentOrConditions: any[] = [{ guest: guest._id }, { hotel: hotelId, guest: { $in: guestSearchIds } }];
+    if (activeBooking) {
+      paymentOrConditions.push({ booking: activeBooking._id });
+    }
+
+    const payments = await Payment.find({ $or: paymentOrConditions }).sort({ createdAt: -1 });
+    const paymentHistory = payments.map((p) => {
+      let desc = 'Room Booking';
+      if (p.paymentType === 'ADVANCE') desc = 'Advance Booking Payment';
+      else if (p.paymentType === 'EXTRA_CHARGE') desc = 'Extra Services / Food Charge';
+      else if (p.paymentType === 'PARTIAL') desc = 'Part Payment';
+      else if (p.paymentType === 'FULL_SETTLEMENT') desc = 'Full Check-in / Checkout Settlement';
+      if (p.note) desc += ` - ${p.note}`;
+
+      const taxPortion = activeBooking?.taxAmount ? Math.round(p.amount * 0.18 / 1.18) : 0;
+      const basePortion = Math.max(0, p.amount - taxPortion);
+
+      return {
+        id: p._id,
+        date: p.createdAt,
+        formattedDate: new Date(p.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+        transactionId: p.transactionId || p.receiptNumber,
+        receiptNumber: p.receiptNumber,
+        description: desc,
+        paymentMethod: p.paymentMethod || 'UPI',
+        amount: basePortion,
+        gst: taxPortion,
+        total: p.amount,
+        status: p.paymentStatus || 'PAID',
+      };
+    });
+
+    let charges: any[] = [];
+    if (activeBooking) {
+      charges = await BookingCharge.find({ booking: activeBooking._id });
+    }
+
+    const hotel = await Hotel.findById(hotelId).lean();
+
+    // 1. Generate PDF and store in uploads/pdfs folder
+    const pdfPath = await generateGuestFolioPdf({
+      guest,
+      activeBooking,
+      roomsDetail,
+      paymentHistory,
+      charges,
+      accompanyingGuests: activeBooking?.accompanyingGuests || guest?.accompanyingGuests || [],
+      hotel: hotel || {},
+    });
+
+    // 2. Build PDF URL using BASE_URL + PDF_PATH
+    const rawBaseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const baseUrl = rawBaseUrl.replace(/\/+$/, '');
+    const normalizedPath = pdfPath.startsWith('/') ? pdfPath : `/${pdfPath}`;
+    const pdfUrl = `${baseUrl}${normalizedPath}`;
+
+    // 3. Return only the PDF URL in the response
+    res.status(200).json({
+      pdfUrl,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 
 // @desc    Delete a Guest record (Safe Soft Delete & Hard Delete Guard)
 // @route   DELETE /api/v1/receptionist/guests/:id

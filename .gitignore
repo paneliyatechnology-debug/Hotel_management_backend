@@ -23,3 +23,6 @@ Thumbs.db
 
 # OCR training data
 *.traineddata
+
+# Uploaded and generated files
+uploads/
