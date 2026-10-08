@@ -13,6 +13,8 @@ export interface GenerateFolioPdfParams {
   hotel?: any;
   req?: any;
   baseUrl?: string;
+  signature?: string;
+  guestSignature?: string;
 }
 
 // Reusable Puppeteer Browser Instance
@@ -82,9 +84,24 @@ function getDefaultLogoBase64(): string {
 
 function cleanImageSrc(src?: string): string {
   if (!src) return '';
+  src = src.trim();
   if (src.startsWith('<svg') || src.startsWith('data:image/svg+xml;utf8,<svg')) {
     const rawSvg = src.startsWith('data:image/svg+xml;utf8,') ? src.replace('data:image/svg+xml;utf8,', '') : src;
     return `data:image/svg+xml;base64,${Buffer.from(rawSvg).toString('base64')}`;
+  }
+  if (src.startsWith('/uploads/') || src.startsWith('uploads/') || src.startsWith('/public/') || src.startsWith('public/')) {
+    try {
+      const cleanRel = src.startsWith('/') ? src.slice(1) : src;
+      const fullPath = path.join(process.cwd(), cleanRel);
+      if (fs.existsSync(fullPath)) {
+        const ext = path.extname(fullPath).toLowerCase().replace('.', '') || 'png';
+        const mimeType = ext === 'jpg' ? 'jpeg' : ext;
+        const data = fs.readFileSync(fullPath);
+        return `data:image/${mimeType};base64,${data.toString('base64')}`;
+      }
+    } catch {
+      // fallback to original src
+    }
   }
   return src;
 }
@@ -487,16 +504,59 @@ export function buildFolioHtml(params: GenerateFolioPdfParams): string {
       </div>
 
       <!-- Page 2 Official Verification Footer -->
-      <div class="pdf-section" style="display: flex; justify-content: space-between; align-items: flex-end; padding-top: 8px; border-top: 1.5px solid #E2E8F0; font-size: 9.5px; color: #64748B;">
-        <div>
-          <div style="font-weight: 800; color: #0F172A; font-size: 10.5px;">${hotelName} &bull; Security &amp; Compliance Wing</div>
-          <div style="font-size: 8.5px; color: #94A3B8; margin-top: 1px;">Archived Identity Documents attached to Stay Folio #${bookingNumber}</div>
-        </div>
-        <div style="text-align: right; width: 160px;">
-          <div style="border-bottom: 1.5px dashed #94A3B8; margin-bottom: 3px; height: 22px;"></div>
-          <div style="font-size: 9px; font-weight: 800; color: #0F172A; text-transform: uppercase;">Front Desk Verified</div>
-        </div>
+      <div class="pdf-section" style="padding-top: 8px; border-top: 1.5px solid #E2E8F0; font-size: 9.5px; color: #64748B;">
+        <div style="font-weight: 800; color: #0F172A; font-size: 10.5px;">${hotelName} &bull; Security &amp; Compliance Wing</div>
+        <div style="font-size: 8.5px; color: #94A3B8; margin-top: 1px;">Archived Identity Documents attached to Stay Folio #${bookingNumber}</div>
       </div>
+    `;
+  }
+
+  // 6. Digital Signature Authorization Block
+  const rawSignature = cleanImageSrc((
+    booking.guestSignature ||
+    guest.signature ||
+    booking.signature ||
+    params.signature ||
+    params.guestSignature ||
+    ''
+  ).trim());
+
+  const hasSignature = Boolean(
+    rawSignature &&
+    rawSignature !== 'null' &&
+    rawSignature !== 'undefined' &&
+    rawSignature.length > 20
+  );
+
+  const rawSignedAt = booking.guestSignedAt || guest.signatureDate || (booking.createdAt && hasSignature ? booking.createdAt : null);
+  let signedDateFormatted = '';
+  if (rawSignedAt) {
+    try {
+      const d = new Date(rawSignedAt);
+      if (!isNaN(d.getTime())) {
+        const datePart = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+        const timePart = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase();
+        signedDateFormatted = `${datePart}, ${timePart}`;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  let signatureBlock = '';
+  if (hasSignature) {
+    signatureBlock = `
+      <div style="height: 42px; display: flex; align-items: flex-end; justify-content: flex-end; margin-bottom: 2px;">
+        <img src="${rawSignature}" alt="Guest Digital Signature" style="max-height: 40px; max-width: 175px; object-fit: contain;" />
+      </div>
+      <div style="border-bottom: 1.5px solid #0F172A; margin-bottom: 3px;"></div>
+      <div style="font-size: 8px; color: #059669; font-weight: 800; display: flex; align-items: center; justify-content: flex-end; gap: 3px;">
+        <span style="font-size: 9px; font-weight: 900;">✓</span> Digitally Signed${signedDateFormatted ? ` &bull; ${signedDateFormatted}` : ''}
+      </div>
+    `;
+  } else {
+    signatureBlock = `
+      <div style="border-bottom: 1.5px dashed #94A3B8; margin-bottom: 4px; height: 32px;"></div>
     `;
   }
 
@@ -539,6 +599,7 @@ export function buildFolioHtml(params: GenerateFolioPdfParams): string {
     OUTSTANDING_BALANCE: dueAmount <= 0 ? '0 (✓ Settled)' : dueAmount.toLocaleString('en-IN'),
     BALANCE_CLASS: dueAmount <= 0 ? 'balance-settled' : 'balance-due',
     BALANCE_COLOR: dueAmount <= 0 ? '#059669' : '#DC2626',
+    SIGNATURE_BLOCK: signatureBlock,
     ID_PROOFS_SECTION: idProofsSection,
   };
 

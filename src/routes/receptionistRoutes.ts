@@ -57,7 +57,6 @@ router.put('/rooms/:id/status', updateRoomStatus);
 // Guests & ID Proof Verification
 router.get('/guests/lookup', lookupGuest);
 router.get('/guests', getGuestsList);
-router.get('/guests/:id/pdf', getGuestPdfUrl);
 router.get('/guests/:id/folio-pdf', getGuestPdfUrl);
 router.get('/guests/:id', getGuestDetailsById);
 router.post('/guests', registerGuest);

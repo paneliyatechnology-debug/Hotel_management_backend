@@ -1605,6 +1605,214 @@ export const getGuestsList = async (req: AuthenticatedRequest, res: Response): P
   }
 };
 
+/**
+ * Shared helper function to resolve guest stay dossier, room allocations,
+ * booking records, payment history, and ancillary charges.
+ */
+export const resolveGuestStayDetails = async (rawGuestId: string | string[], hotelId: any) => {
+  const guestId = Array.isArray(rawGuestId) ? rawGuestId[0] : String(rawGuestId);
+  let guest: any = null;
+  let fallbackBooking: any = null;
+  const isMongoId = mongoose.isValidObjectId(guestId);
+
+  if (isMongoId) {
+    // 1. Try finding guest by ID and hotel
+    guest = await Guest.findOne({ _id: guestId, hotel: hotelId, isDeleted: { $ne: true } });
+
+    // 2. If not found by hotel, check if guest exists generally
+    if (!guest) {
+      guest = await Guest.findOne({ _id: guestId, isDeleted: { $ne: true } });
+    }
+
+    // 3. If still not found, check if guestId is actually a Booking ID
+    if (!guest) {
+      const b = await Booking.findOne({ _id: guestId, hotel: hotelId })
+        .populate('guest')
+        .populate('room')
+        .populate('rooms')
+        .populate('roomType');
+
+      if (b) {
+        fallbackBooking = b;
+        if (b.guest && typeof b.guest === 'object') {
+          guest = b.guest;
+        }
+      }
+    }
+  }
+
+  // 4. If still not found, try finding by phone number or email
+  if (!guest) {
+    guest = await Guest.findOne({
+      hotel: hotelId,
+      isDeleted: { $ne: true },
+      $or: [{ mobileNumber: guestId }, { email: guestId }],
+    });
+  }
+
+  // 5. If still no guest document, but we have a booking or can find a booking by phone/id
+  if (!guest) {
+    if (!fallbackBooking && isMongoId) {
+      fallbackBooking = await Booking.findOne({ _id: guestId }).populate('room rooms roomType');
+    }
+    if (!fallbackBooking) {
+      fallbackBooking = await Booking.findOne({
+        hotel: hotelId,
+        $or: [{ guestPhone: guestId }, { guestEmail: guestId }],
+      }).populate('room rooms roomType');
+    }
+
+    if (fallbackBooking) {
+      guest = {
+        _id: fallbackBooking.guest?._id || fallbackBooking._id,
+        fullName: fallbackBooking.guestName || (fallbackBooking.guest as any)?.fullName || 'Walk-in Guest',
+        mobileNumber: fallbackBooking.guestPhone || (fallbackBooking.guest as any)?.mobileNumber || '',
+        email: fallbackBooking.guestEmail || (fallbackBooking.guest as any)?.email || '',
+        address: fallbackBooking.guestAddress || '',
+        city: (fallbackBooking.guest as any)?.city || '',
+        state: (fallbackBooking.guest as any)?.state || '',
+        idProof: (fallbackBooking.guest as any)?.idProof || fallbackBooking.idProof || {
+          frontImage: fallbackBooking.frontImage || '',
+          backImage: fallbackBooking.backImage || '',
+        },
+        signature: fallbackBooking.guestSignature || (fallbackBooking.guest as any)?.signature || '',
+        signatureDate: fallbackBooking.guestSignedAt || (fallbackBooking.guest as any)?.signatureDate || null,
+        totalVisits: 1,
+        totalSpent: fallbackBooking.totalAmount || 0,
+        status: fallbackBooking.status === 'CHECKED_IN' ? 'IN-HOUSE' : fallbackBooking.status,
+        createdAt: fallbackBooking.createdAt,
+      };
+    }
+  }
+
+  if (!guest) {
+    return null;
+  }
+
+  // Find all bookings for this guest or related booking
+  const guestSearchIds = [guest._id];
+  if (fallbackBooking && fallbackBooking._id) {
+    guestSearchIds.push(fallbackBooking._id);
+  }
+
+  const bookingOrConditions: any[] = [
+    { guest: { $in: guestSearchIds } },
+    { _id: { $in: guestSearchIds } },
+  ];
+  if (guest.mobileNumber) {
+    bookingOrConditions.push({ guestPhone: guest.mobileNumber });
+  }
+
+  const allBookings = await Booking.find({
+    hotel: hotelId,
+    isDeleted: { $ne: true },
+    $or: bookingOrConditions,
+  })
+    .populate('room', 'roomNumber floor status customPricePerNight pricePerNight')
+    .populate('rooms', 'roomNumber floor status customPricePerNight pricePerNight')
+    .populate('roomType', 'name basePrice gstRate')
+    .sort({ createdAt: -1 });
+
+  const activeBooking =
+    allBookings.find((b) => b.status === 'CHECKED_IN') ||
+    allBookings.find((b) => b.status === 'CONFIRMED') ||
+    fallbackBooking ||
+    allBookings[0] || null;
+
+  if (activeBooking) {
+    const checkInStr = activeBooking.checkInDate ? new Date(activeBooking.checkInDate).toISOString().split('T')[0] : '';
+    const checkOutStr = activeBooking.checkOutDate ? new Date(activeBooking.checkOutDate).toISOString().split('T')[0] : '';
+    if (checkInStr && checkOutStr) {
+      const [y1, m1, d1] = checkInStr.split('-').map(Number);
+      const [y2, m2, d2] = checkOutStr.split('-').map(Number);
+      const trueNights = Math.max(1, Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / (1000 * 60 * 60 * 24)));
+      if (activeBooking.numberOfNights && activeBooking.numberOfNights > trueNights) {
+        const oldNights = activeBooking.numberOfNights;
+        activeBooking.numberOfNights = trueNights;
+        activeBooking.totalAmount = Math.round((activeBooking.totalAmount / oldNights) * trueNights);
+        activeBooking.dueAmount = Math.max(0, activeBooking.totalAmount - (activeBooking.paidAmount || 0));
+        activeBooking.save().catch(() => { });
+      }
+    }
+  }
+
+  // Multi-Room Breakdown for active booking
+  let roomsDetail: any[] = [];
+  if (activeBooking) {
+    const rList = Array.isArray(activeBooking.rooms) && activeBooking.rooms.length > 0
+      ? activeBooking.rooms
+      : activeBooking.room ? [activeBooking.room] : [];
+
+    roomsDetail = rList.map((rm: any) => {
+      const tariff = Number(rm.customPricePerNight) || Number(rm.pricePerNight) || Number((activeBooking.roomType as any)?.basePrice) || 3000;
+      const nights = activeBooking.numberOfNights || 1;
+      const rtName = (typeof rm.roomType === 'object' && rm.roomType?.name) ? rm.roomType.name : ((activeBooking.roomType as any)?.name || rm.roomType || 'Standard Room');
+      const fl = rm.floor !== undefined && rm.floor !== null ? rm.floor : (parseInt(String(rm.roomNumber || ''), 10) >= 100 ? Math.floor(parseInt(String(rm.roomNumber || ''), 10) / 100) : 1);
+      return {
+        id: rm._id,
+        roomNumber: rm.roomNumber,
+        roomType: rtName,
+        floor: fl,
+        pricePerNight: tariff,
+        numberOfNights: nights,
+        roomTotal: tariff * nights,
+        status: rm.status || 'OCCUPIED',
+      };
+    });
+  }
+
+  // Payment History from Payment Collection
+  const paymentOrConditions: any[] = [{ guest: guest._id }, { hotel: hotelId, guest: { $in: guestSearchIds } }];
+  if (activeBooking) {
+    paymentOrConditions.push({ booking: activeBooking._id });
+  }
+  const payments = await Payment.find({
+    $or: paymentOrConditions,
+  }).sort({ createdAt: -1 });
+
+  const paymentHistory = payments.map((p) => {
+    let desc = 'Room Booking';
+    if (p.paymentType === 'ADVANCE') desc = 'Advance Booking Payment';
+    else if (p.paymentType === 'EXTRA_CHARGE') desc = 'Extra Services / Food Charge';
+    else if (p.paymentType === 'PARTIAL') desc = 'Part Payment';
+    else if (p.paymentType === 'FULL_SETTLEMENT') desc = 'Full Check-in / Checkout Settlement';
+    if (p.note) desc += ` - ${p.note}`;
+
+    const taxPortion = activeBooking?.taxAmount ? Math.round(p.amount * 0.18 / 1.18) : 0;
+    const basePortion = Math.max(0, p.amount - taxPortion);
+
+    return {
+      id: p._id,
+      date: p.createdAt,
+      formattedDate: new Date(p.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+      transactionId: p.transactionId || p.receiptNumber,
+      receiptNumber: p.receiptNumber,
+      description: desc,
+      paymentMethod: p.paymentMethod || 'UPI',
+      amount: basePortion,
+      gst: taxPortion,
+      total: p.amount,
+      status: p.paymentStatus || 'PAID',
+    };
+  });
+
+  let charges: any[] = [];
+  if (activeBooking) {
+    charges = await BookingCharge.find({ booking: activeBooking._id });
+  }
+
+  return {
+    guest,
+    activeBooking,
+    roomsDetail,
+    paymentHistory,
+    payments,
+    charges,
+    allBookings,
+    fallbackBooking,
+  };
+};
+
 // @desc    Get Detailed Guest Profile with Bookings, Multi-Rooms, Payments & Timeline
 // @route   GET /api/v1/receptionist/guests/:id
 export const getGuestDetailsById = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -1617,189 +1825,13 @@ export const getGuestDetailsById = async (req: AuthenticatedRequest, res: Respon
       return;
     }
 
-    let guest: any = null;
-    let fallbackBooking: any = null;
-    const isMongoId = mongoose.isValidObjectId(guestId);
-
-    if (isMongoId) {
-      // 1. Try finding guest by ID and hotel
-      guest = await Guest.findOne({ _id: guestId, hotel: hotelId, isDeleted: { $ne: true } });
-
-      // 2. If not found by hotel, check if guest exists generally
-      if (!guest) {
-        guest = await Guest.findOne({ _id: guestId, isDeleted: { $ne: true } });
-      }
-
-      // 3. If still not found, check if guestId is actually a Booking ID
-      if (!guest) {
-        const b = await Booking.findOne({ _id: guestId, hotel: hotelId })
-          .populate('guest')
-          .populate('room')
-          .populate('rooms')
-          .populate('roomType');
-
-        if (b) {
-          fallbackBooking = b;
-          if (b.guest && typeof b.guest === 'object') {
-            guest = b.guest;
-          }
-        }
-      }
-    }
-
-    // 4. If still not found, try finding by phone number or email
-    if (!guest) {
-      guest = await Guest.findOne({
-        hotel: hotelId,
-        isDeleted: { $ne: true },
-        $or: [{ mobileNumber: guestId }, { email: guestId }],
-      });
-    }
-
-    // 5. If still no guest document, but we have a booking or can find a booking by phone/id
-    if (!guest) {
-      if (!fallbackBooking && isMongoId) {
-        fallbackBooking = await Booking.findOne({ _id: guestId }).populate('room rooms roomType');
-      }
-      if (!fallbackBooking) {
-        fallbackBooking = await Booking.findOne({
-          hotel: hotelId,
-          $or: [{ guestPhone: guestId }, { guestEmail: guestId }],
-        }).populate('room rooms roomType');
-      }
-
-      if (fallbackBooking) {
-        guest = {
-          _id: fallbackBooking.guest?._id || fallbackBooking._id,
-          fullName: fallbackBooking.guestName || (fallbackBooking.guest as any)?.fullName || 'Walk-in Guest',
-          mobileNumber: fallbackBooking.guestPhone || (fallbackBooking.guest as any)?.mobileNumber || '',
-          email: fallbackBooking.guestEmail || (fallbackBooking.guest as any)?.email || '',
-          address: fallbackBooking.guestAddress || '',
-          city: (fallbackBooking.guest as any)?.city || '',
-          state: (fallbackBooking.guest as any)?.state || '',
-          idProof: (fallbackBooking.guest as any)?.idProof || fallbackBooking.idProof || {
-            frontImage: fallbackBooking.frontImage || '',
-            backImage: fallbackBooking.backImage || '',
-          },
-          totalVisits: 1,
-          totalSpent: fallbackBooking.totalAmount || 0,
-          status: fallbackBooking.status === 'CHECKED_IN' ? 'IN-HOUSE' : fallbackBooking.status,
-          createdAt: fallbackBooking.createdAt,
-        };
-      }
-    }
-
-    if (!guest) {
+    const stayData = await resolveGuestStayDetails(guestId, hotelId);
+    if (!stayData || !stayData.guest) {
       res.status(404).json({ success: false, message: 'Guest profile not found.' });
       return;
     }
 
-    // Find all bookings for this guest or related booking
-    const guestSearchIds = [guest._id];
-    if (fallbackBooking && fallbackBooking._id) {
-      guestSearchIds.push(fallbackBooking._id);
-    }
-
-    const bookingOrConditions: any[] = [
-      { guest: { $in: guestSearchIds } },
-      { _id: { $in: guestSearchIds } },
-    ];
-    if (guest.mobileNumber) {
-      bookingOrConditions.push({ guestPhone: guest.mobileNumber });
-    }
-
-    const allBookings = await Booking.find({
-      hotel: hotelId,
-      isDeleted: { $ne: true },
-      $or: bookingOrConditions,
-    })
-      .populate('room', 'roomNumber floor status customPricePerNight pricePerNight')
-      .populate('rooms', 'roomNumber floor status customPricePerNight pricePerNight')
-      .populate('roomType', 'name basePrice gstRate')
-      .sort({ createdAt: -1 });
-
-    const activeBooking =
-      allBookings.find((b) => b.status === 'CHECKED_IN') ||
-      allBookings.find((b) => b.status === 'CONFIRMED') ||
-      fallbackBooking ||
-      allBookings[0] || null;
-
-    if (activeBooking) {
-      const checkInStr = activeBooking.checkInDate ? new Date(activeBooking.checkInDate).toISOString().split('T')[0] : '';
-      const checkOutStr = activeBooking.checkOutDate ? new Date(activeBooking.checkOutDate).toISOString().split('T')[0] : '';
-      if (checkInStr && checkOutStr) {
-        const [y1, m1, d1] = checkInStr.split('-').map(Number);
-        const [y2, m2, d2] = checkOutStr.split('-').map(Number);
-        const trueNights = Math.max(1, Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / (1000 * 60 * 60 * 24)));
-        if (activeBooking.numberOfNights && activeBooking.numberOfNights > trueNights) {
-          const oldNights = activeBooking.numberOfNights;
-          activeBooking.numberOfNights = trueNights;
-          activeBooking.totalAmount = Math.round((activeBooking.totalAmount / oldNights) * trueNights);
-          activeBooking.dueAmount = Math.max(0, activeBooking.totalAmount - (activeBooking.paidAmount || 0));
-          activeBooking.save().catch(() => { });
-        }
-      }
-    }
-
-    // Multi-Room Breakdown for active booking
-    let roomsDetail: any[] = [];
-    if (activeBooking) {
-      const rList = Array.isArray(activeBooking.rooms) && activeBooking.rooms.length > 0
-        ? activeBooking.rooms
-        : activeBooking.room ? [activeBooking.room] : [];
-
-      roomsDetail = rList.map((rm: any) => {
-        const tariff = Number(rm.customPricePerNight) || Number(rm.pricePerNight) || Number((activeBooking.roomType as any)?.basePrice) || 3000;
-        const nights = activeBooking.numberOfNights || 1;
-        const rtName = (typeof rm.roomType === 'object' && rm.roomType?.name) ? rm.roomType.name : ((activeBooking.roomType as any)?.name || rm.roomType || 'Standard Room');
-        const fl = rm.floor !== undefined && rm.floor !== null ? rm.floor : (parseInt(String(rm.roomNumber || ''), 10) >= 100 ? Math.floor(parseInt(String(rm.roomNumber || ''), 10) / 100) : 1);
-        return {
-          id: rm._id,
-          roomNumber: rm.roomNumber,
-          roomType: rtName,
-          floor: fl,
-          pricePerNight: tariff,
-          numberOfNights: nights,
-          roomTotal: tariff * nights,
-          status: rm.status || 'OCCUPIED',
-        };
-      });
-    }
-
-    // Payment History from Payment Collection
-    const paymentOrConditions: any[] = [{ guest: guest._id }, { hotel: hotelId, guest: { $in: guestSearchIds } }];
-    if (activeBooking) {
-      paymentOrConditions.push({ booking: activeBooking._id });
-    }
-    const payments = await Payment.find({
-      $or: paymentOrConditions,
-    }).sort({ createdAt: -1 });
-
-    const paymentHistory = payments.map((p) => {
-      let desc = 'Room Booking';
-      if (p.paymentType === 'ADVANCE') desc = 'Advance Booking Payment';
-      else if (p.paymentType === 'EXTRA_CHARGE') desc = 'Extra Services / Food Charge';
-      else if (p.paymentType === 'PARTIAL') desc = 'Part Payment';
-      else if (p.paymentType === 'FULL_SETTLEMENT') desc = 'Full Check-in / Checkout Settlement';
-      if (p.note) desc += ` - ${p.note}`;
-
-      const taxPortion = activeBooking?.taxAmount ? Math.round(p.amount * 0.18 / 1.18) : 0;
-      const basePortion = Math.max(0, p.amount - taxPortion);
-
-      return {
-        id: p._id,
-        date: p.createdAt,
-        formattedDate: new Date(p.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-        transactionId: p.transactionId || p.receiptNumber,
-        receiptNumber: p.receiptNumber,
-        description: desc,
-        paymentMethod: p.paymentMethod || 'UPI',
-        amount: basePortion,
-        gst: taxPortion,
-        total: p.amount,
-        status: p.paymentStatus || 'PAID',
-      };
-    });
+    const { guest, activeBooking, roomsDetail, paymentHistory, payments, charges, allBookings } = stayData;
 
     // Activity Timeline from DB Timestamps
     const timeline: any[] = [];
@@ -1842,7 +1874,6 @@ export const getGuestDetailsById = async (req: AuthenticatedRequest, res: Respon
         });
       }
 
-      const charges = await BookingCharge.find({ booking: activeBooking._id });
       charges.forEach((c) => {
         timeline.push({
           title: `Additional Charge: ${c.title}`,
@@ -1894,7 +1925,6 @@ export const getGuestDetailsById = async (req: AuthenticatedRequest, res: Respon
 };
 
 // @desc    Generate Guest Stay Folio PDF and return only the PDF URL
-// @route   GET /api/v1/receptionist/guests/:id/pdf
 // @route   GET /api/v1/receptionist/guests/:id/folio-pdf
 export const getGuestPdfUrl = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
@@ -1906,169 +1936,13 @@ export const getGuestPdfUrl = async (req: AuthenticatedRequest, res: Response): 
       return;
     }
 
-    let guest: any = null;
-    let fallbackBooking: any = null;
-    const isMongoId = mongoose.isValidObjectId(guestId);
-
-    if (isMongoId) {
-      // 1. Try finding guest by ID and hotel
-      guest = await Guest.findOne({ _id: guestId, hotel: hotelId, isDeleted: { $ne: true } });
-
-      // 2. If not found by hotel, check if guest exists generally
-      if (!guest) {
-        guest = await Guest.findOne({ _id: guestId, isDeleted: { $ne: true } });
-      }
-
-      // 3. If still not found, check if guestId is actually a Booking ID
-      if (!guest) {
-        const b = await Booking.findOne({ _id: guestId, hotel: hotelId })
-          .populate('guest')
-          .populate('room')
-          .populate('rooms')
-          .populate('roomType');
-
-        if (b) {
-          fallbackBooking = b;
-          if (b.guest && typeof b.guest === 'object') {
-            guest = b.guest;
-          }
-        }
-      }
-    }
-
-    // 4. If still not found, try finding by phone number or email
-    if (!guest) {
-      guest = await Guest.findOne({
-        hotel: hotelId,
-        isDeleted: { $ne: true },
-        $or: [{ mobileNumber: guestId }, { email: guestId }],
-      });
-    }
-
-    // 5. If still no guest document, but we have a booking
-    if (!guest) {
-      if (!fallbackBooking && isMongoId) {
-        fallbackBooking = await Booking.findOne({ _id: guestId }).populate('room rooms roomType');
-      }
-      if (!fallbackBooking) {
-        fallbackBooking = await Booking.findOne({
-          hotel: hotelId,
-          $or: [{ guestPhone: guestId }, { guestEmail: guestId }],
-        }).populate('room rooms roomType');
-      }
-
-      if (fallbackBooking) {
-        guest = {
-          _id: fallbackBooking.guest?._id || fallbackBooking._id,
-          fullName: fallbackBooking.guestName || (fallbackBooking.guest as any)?.fullName || 'Walk-in Guest',
-          mobileNumber: fallbackBooking.guestPhone || (fallbackBooking.guest as any)?.mobileNumber || '',
-          email: fallbackBooking.guestEmail || (fallbackBooking.guest as any)?.email || '',
-          address: fallbackBooking.guestAddress || '',
-          city: (fallbackBooking.guest as any)?.city || '',
-          state: (fallbackBooking.guest as any)?.state || '',
-          idProof: (fallbackBooking.guest as any)?.idProof || fallbackBooking.idProof || {
-            frontImage: fallbackBooking.frontImage || '',
-            backImage: fallbackBooking.backImage || '',
-          },
-          totalVisits: 1,
-          totalSpent: fallbackBooking.totalAmount || 0,
-          status: fallbackBooking.status === 'CHECKED_IN' ? 'IN-HOUSE' : fallbackBooking.status,
-          createdAt: fallbackBooking.createdAt,
-        };
-      }
-    }
-
-    if (!guest) {
+    const stayData = await resolveGuestStayDetails(guestId, hotelId);
+    if (!stayData || !stayData.guest) {
       res.status(404).json({ success: false, message: 'Guest profile not found.' });
       return;
     }
 
-    const guestSearchIds = [guest._id];
-    if (fallbackBooking && fallbackBooking._id) {
-      guestSearchIds.push(fallbackBooking._id);
-    }
-
-    const bookingOrConditions: any[] = [
-      { guest: { $in: guestSearchIds } },
-      { _id: { $in: guestSearchIds } },
-    ];
-    if (guest.mobileNumber) {
-      bookingOrConditions.push({ guestPhone: guest.mobileNumber });
-    }
-
-    const allBookings = await Booking.find({
-      hotel: hotelId,
-      isDeleted: { $ne: true },
-      $or: bookingOrConditions,
-    })
-      .populate('room', 'roomNumber floor status customPricePerNight pricePerNight')
-      .populate('rooms', 'roomNumber floor status customPricePerNight pricePerNight')
-      .populate('roomType', 'name basePrice gstRate')
-      .sort({ createdAt: -1 });
-
-    const activeBooking =
-      allBookings.find((b) => b.status === 'CHECKED_IN') ||
-      allBookings.find((b) => b.status === 'CONFIRMED') ||
-      fallbackBooking ||
-      allBookings[0] || null;
-
-    let roomsDetail: any[] = [];
-    if (activeBooking) {
-      const rList = Array.isArray(activeBooking.rooms) && activeBooking.rooms.length > 0
-        ? activeBooking.rooms
-        : activeBooking.room ? [activeBooking.room] : [];
-
-      roomsDetail = rList.map((rm: any) => {
-        const tariff = Number(rm.customPricePerNight) || Number(rm.pricePerNight) || Number((activeBooking.roomType as any)?.basePrice) || 3000;
-        const nights = activeBooking.numberOfNights || 1;
-        const rtName = (typeof rm.roomType === 'object' && rm.roomType?.name) ? rm.roomType.name : ((activeBooking.roomType as any)?.name || rm.roomType || 'Standard Room');
-        return {
-          id: rm._id,
-          roomNumber: rm.roomNumber,
-          roomType: rtName,
-          pricePerNight: tariff,
-          numberOfNights: nights,
-          roomTotal: tariff * nights,
-        };
-      });
-    }
-
-    const paymentOrConditions: any[] = [{ guest: guest._id }, { hotel: hotelId, guest: { $in: guestSearchIds } }];
-    if (activeBooking) {
-      paymentOrConditions.push({ booking: activeBooking._id });
-    }
-
-    const payments = await Payment.find({ $or: paymentOrConditions }).sort({ createdAt: -1 });
-    const paymentHistory = payments.map((p) => {
-      let desc = 'Room Booking';
-      if (p.paymentType === 'ADVANCE') desc = 'Advance Booking Payment';
-      else if (p.paymentType === 'EXTRA_CHARGE') desc = 'Extra Services / Food Charge';
-      else if (p.paymentType === 'PARTIAL') desc = 'Part Payment';
-      else if (p.paymentType === 'FULL_SETTLEMENT') desc = 'Full Check-in / Checkout Settlement';
-      if (p.note) desc += ` - ${p.note}`;
-
-      const taxPortion = activeBooking?.taxAmount ? Math.round(p.amount * 0.18 / 1.18) : 0;
-      const basePortion = Math.max(0, p.amount - taxPortion);
-
-      return {
-        id: p._id,
-        date: p.createdAt,
-        formattedDate: new Date(p.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-        transactionId: p.transactionId || p.receiptNumber,
-        receiptNumber: p.receiptNumber,
-        description: desc,
-        paymentMethod: p.paymentMethod || 'UPI',
-        amount: basePortion,
-        gst: taxPortion,
-        total: p.amount,
-        status: p.paymentStatus || 'PAID',
-      };
-    });
-
-    let charges: any[] = [];
-    if (activeBooking) {
-      charges = await BookingCharge.find({ booking: activeBooking._id });
-    }
+    const { guest, activeBooking, roomsDetail, paymentHistory, charges } = stayData;
 
     const hotel = await Hotel.findById(hotelId).lean();
 
@@ -2814,6 +2688,12 @@ export const saveGuestSignature = async (req: AuthenticatedRequest, res: Respons
     guest.signatureDate = new Date();
     await guest.save();
 
+    // Sync to active booking if exists
+    await Booking.updateMany(
+      { hotel: req.hotelId, guest: guest._id, status: { $in: ['CHECKED_IN', 'CONFIRMED'] } },
+      { $set: { guestSignature: signature, guestSignedAt: guest.signatureDate } }
+    ).catch(() => {});
+
     res.status(200).json({
       success: true,
       message: 'Guest signature saved successfully',
@@ -2851,6 +2731,14 @@ export const saveBookingSignature = async (req: AuthenticatedRequest, res: Respo
     booking.guestSignature = signature;
     booking.guestSignedAt = new Date();
     await booking.save();
+
+    // Sync to Guest record if linked
+    if (booking.guest) {
+      await Guest.updateOne(
+        { _id: booking.guest, hotel: req.hotelId },
+        { $set: { signature: signature, signatureDate: booking.guestSignedAt } }
+      ).catch(() => {});
+    }
 
     res.status(200).json({
       success: true,

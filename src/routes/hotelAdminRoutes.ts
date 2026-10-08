@@ -43,7 +43,6 @@ router.use(
 router.get('/dashboard', getHotelAdminDashboard);
 router.get('/revenue-details', getRevenueDetails);
 router.get('/guests', getGuestsList);
-router.get('/guests/:id/pdf', getGuestPdfUrl);
 router.get('/guests/:id/folio-pdf', getGuestPdfUrl);
 router.get('/guests/:id', getGuestDetailsById);
 
