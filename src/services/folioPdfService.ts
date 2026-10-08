@@ -584,11 +584,11 @@ export async function generateFolioPdfBuffer(html: string): Promise<Buffer> {
 }
 
 /**
- * Simple reusable function: generates the PDF, stores it in uploads/pdfs on the server,
+ * Simple reusable function: generates the PDF, stores it in uploads/folios on the server,
  * and returns the relative file path.
  */
 export async function generateGuestFolioPdf(params: GenerateFolioPdfParams): Promise<string> {
-  const uploadDir = path.join(process.cwd(), 'uploads', 'pdfs');
+  const uploadDir = path.join(process.cwd(), 'uploads', 'folios');
 
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
@@ -608,5 +608,5 @@ export async function generateGuestFolioPdf(params: GenerateFolioPdfParams): Pro
   fs.writeFileSync(localFilePath, buffer);
 
   // Return relative file path
-  return `/uploads/pdfs/${filename}`;
+  return `/uploads/folios/${filename}`;
 }

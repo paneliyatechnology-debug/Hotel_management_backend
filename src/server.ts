@@ -18,6 +18,7 @@ import subscriptionPlanRoutes from './routes/subscriptionPlanRoutes';
 import signatureSyncRoutes from './routes/signatureSyncRoutes';
 import settingsRoutes from './routes/settingsRoutes';
 import uploadRoutes from './routes/uploadRoutes';
+import cronRoutes from './routes/cronRoutes';
 
 import { ensureDefaultPlansExist } from './controllers/subscriptionPlanController';
 import { autoCompleteExpiredCleaningRooms } from './utils/housekeepingService';
@@ -97,6 +98,8 @@ app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/v1/upload', uploadRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/v1/cron', cronRoutes);
+app.use('/api/cron', cronRoutes);
 
 // Health Check & Documentation Overview
 app.get('/', (req: Request, res: Response) => {
@@ -112,6 +115,7 @@ app.get('/', (req: Request, res: Response) => {
       superAdmin: '/api/v1/super-admin',
       hotelAdmin: '/api/v1/admin',
       receptionist: '/api/v1/receptionist',
+      cron: '/api/v1/cron',
     },
     timestamp: new Date().toISOString(),
   });

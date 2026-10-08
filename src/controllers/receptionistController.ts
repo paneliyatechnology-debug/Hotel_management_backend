@@ -2053,7 +2053,7 @@ export const getGuestPdfUrl = async (req: AuthenticatedRequest, res: Response): 
 
     const hotel = await Hotel.findById(hotelId).lean();
 
-    // 1. Generate PDF and store in uploads/pdfs folder
+    // 1. Generate PDF and store in uploads/folios folder
     const pdfPath = await generateGuestFolioPdf({
       guest,
       activeBooking,
