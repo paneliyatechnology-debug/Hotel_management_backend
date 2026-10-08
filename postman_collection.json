@@ -1,397 +1,10 @@
 {
   "info": {
-    "_postman_id": "hotel-mgmt-multi-tenant-v1",
-    "name": "Hotel Management API (Multi-Tenant SaaS)",
-    "description": "Production-ready Postman Collection for Multi-Tenant Hotel Management System with Super Admin, Hotel Admin, and Receptionist roles, tenant isolation, and live sync.",
+    "_postman_id": "hotel-management-saas-complete-api-v1",
+    "name": "Hotel Management System - Multi-Tenant SaaS API (Complete Collection)",
+    "description": "Comprehensive production-ready Postman collection covering 100% of the Multi-Tenant Hotel Management SaaS Backend APIs. Includes role-based access for Super Admin, Hotel Admin, and Front Desk Receptionist, real-time WebSockets, zero-OTP KYC OCR verification, room management, billing, payments, PDF folios, and mobile signature synchronization.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
-  "item": [
-    {
-      "name": "1. Common Authentication & Profile",
-      "item": [
-        {
-          "name": "1.1 Login (Super Admin / Hotel Admin / Receptionist)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"superadmin@hotelmgmt.com\",\n  \"password\": \"SuperAdmin@2026\"\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
-          }
-        },
-        {
-          "name": "1.2 Refresh Access Token (Using Refresh Token)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/auth/refresh-token", "host": ["{{baseUrl}}"], "path": ["auth", "refresh-token"] }
-          }
-        },
-        {
-          "name": "1.3 Get Current Profile (Me)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": { "raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth", "me"] }
-          }
-        },
-        {
-          "name": "1.4 Change Password (First Login / Profile)",
-          "request": {
-            "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"currentPassword\": \"SuperAdmin@2026\",\n  \"newPassword\": \"NewSecurePass@2026\"\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/auth/change-password", "host": ["{{baseUrl}}"], "path": ["auth", "change-password"] }
-          }
-        },
-        {
-          "name": "1.5 Forgot Password (Send OTP)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"jatinkakadiya01@gmail.com\"\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/auth/forgot-password", "host": ["{{baseUrl}}"], "path": ["auth", "forgot-password"] }
-          }
-        },
-        {
-          "name": "1.6 Reset Password with OTP",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"jatinkakadiya01@gmail.com\",\n  \"otp\": \"123456\",\n  \"newPassword\": \"ResetPass@2026\"\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/auth/reset-password", "host": ["{{baseUrl}}"], "path": ["auth", "reset-password"] }
-          }
-        },
-        {
-          "name": "1.7 Logout",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": { "raw": "{{baseUrl}}/auth/logout", "host": ["{{baseUrl}}"], "path": ["auth", "logout"] }
-          }
-        }
-      ]
-    },
-    {
-      "name": "2. Public Hotel Registration",
-      "item": [
-        {
-          "name": "Register New Hotel (Status: PENDING_APPROVAL)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"The Grand Royale Resort & Spa\",\n  \"ownerName\": \"Jatin Patel\",\n  \"ownerEmail\": \"jatinkakadiya01@gmail.com\",\n  \"ownerPhone\": \"+91 98765 43210\",\n  \"address\": \"742 Ocean Drive, Coastal Paradise\",\n  \"city\": \"Ahmedabad\",\n  \"state\": \"Gujarat\",\n  \"country\": \"India\",\n  \"pincode\": \"380015\",\n  \"gstNumber\": \"24ABCDE1234F1Z5\",\n  \"totalRooms\": 25,\n  \"hotelType\": \"Luxury Boutique Hotel\"\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/hotels/register", "host": ["{{baseUrl}}"], "path": ["hotels", "register"] }
-          }
-        }
-      ]
-    },
-    {
-      "name": "3. Super Admin (Master Control)",
-      "item": [
-        {
-          "name": "Super Admin Dashboard KPIs",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": { "raw": "{{baseUrl}}/super-admin/dashboard", "host": ["{{baseUrl}}"], "path": ["super-admin", "dashboard"] }
-          }
-        },
-        {
-          "name": "Get All Hotels (Filter by status/trial)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/super-admin/hotels?status=ALL&subscriptionStatus=ALL",
-              "host": ["{{baseUrl}}"],
-              "path": ["super-admin", "hotels"],
-              "query": [
-                { "key": "status", "value": "ALL" },
-                { "key": "subscriptionStatus", "value": "ALL" }
-              ]
-            }
-          }
-        },
-        {
-          "name": "Get Hotel Details & Staff",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": { "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}", "host": ["{{baseUrl}}"], "path": ["super-admin", "hotels", "{{hotelId}}"] }
-          }
-        },
-        {
-          "name": "Approve Hotel (Creates Admin & 30-Day Trial)",
-          "request": {
-            "method": "PUT",
-            "header": [],
-            "url": { "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}/approve", "host": ["{{baseUrl}}"], "path": ["super-admin", "hotels", "{{hotelId}}", "approve"] }
-          }
-        },
-        {
-          "name": "Reject Hotel Application",
-          "request": {
-            "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"reason\": \"Invalid GST / Incomplete business documents submitted.\"\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}/reject", "host": ["{{baseUrl}}"], "path": ["super-admin", "hotels", "{{hotelId}}", "reject"] }
-          }
-        },
-        {
-          "name": "Change Hotel Status (DISABLE / SUSPEND / ACTIVATE)",
-          "request": {
-            "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"status\": \"DISABLED\"\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}/status", "host": ["{{baseUrl}}"], "path": ["super-admin", "hotels", "{{hotelId}}", "status"] }
-          }
-        },
-        {
-          "name": "Extend Trial / Grace Period",
-          "request": {
-            "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"additionalDays\": 30,\n  \"plan\": \"STANDARD\"\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}/extend-trial", "host": ["{{baseUrl}}"], "path": ["super-admin", "hotels", "{{hotelId}}", "extend-trial"] }
-          }
-        },
-        {
-          "name": "Reset Hotel Admin Password",
-          "request": {
-            "method": "PUT",
-            "header": [],
-            "url": { "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}/reset-admin-password", "host": ["{{baseUrl}}"], "path": ["super-admin", "hotels", "{{hotelId}}", "reset-admin-password"] }
-          }
-        },
-        {
-          "name": "View Global System Audit Logs",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": { "raw": "{{baseUrl}}/super-admin/audit-logs", "host": ["{{baseUrl}}"], "path": ["super-admin", "audit-logs"] }
-          }
-        }
-      ]
-    },
-    {
-      "name": "4. Hotel Admin (Tenant Management)",
-      "item": [
-        {
-          "name": "Hotel Admin Dashboard KPIs",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": { "raw": "{{baseUrl}}/admin/dashboard", "host": ["{{baseUrl}}"], "path": ["admin", "dashboard"] }
-          }
-        },
-        {
-          "name": "Create Room Type",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Executive Ocean View Suite\",\n  \"description\": \"Luxury king suite with sea view and private jacuzzi.\",\n  \"basePrice\": 4500,\n  \"capacity\": { \"adults\": 2, \"children\": 1 },\n  \"amenities\": [\"Free WiFi\", \"King Bed\", \"Jacuzzi\", \"Ocean View\", \"LED TV\"]\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/admin/room-types", "host": ["{{baseUrl}}"], "path": ["admin", "room-types"] }
-          }
-        },
-        {
-          "name": "Get Room Types",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": { "raw": "{{baseUrl}}/admin/room-types", "host": ["{{baseUrl}}"], "path": ["admin", "room-types"] }
-          }
-        },
-        {
-          "name": "Create Room",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"roomNumber\": \"101\",\n  \"roomType\": \"{{roomTypeId}}\",\n  \"floor\": 1,\n  \"customPricePerNight\": 4500\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/admin/rooms", "host": ["{{baseUrl}}"], "path": ["admin", "rooms"] }
-          }
-        },
-        {
-          "name": "Get All Hotel Rooms",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": { "raw": "{{baseUrl}}/admin/rooms", "host": ["{{baseUrl}}"], "path": ["admin", "rooms"] }
-          }
-        },
-        {
-          "name": "Update Room Status (AVAILABLE/CLEANING/MAINTENANCE)",
-          "request": {
-            "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"status\": \"AVAILABLE\"\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/admin/rooms/{{roomId}}/status", "host": ["{{baseUrl}}"], "path": ["admin", "rooms", "{{roomId}}", "status"] }
-          }
-        },
-        {
-          "name": "Create Receptionist Staff",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Pooja Sharma\",\n  \"email\": \"pooja.reception@gmail.com\",\n  \"phone\": \"+91 98980 11223\",\n  \"employeeId\": \"EMP-101\"\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/admin/receptionists", "host": ["{{baseUrl}}"], "path": ["admin", "receptionists"] }
-          }
-        },
-        {
-          "name": "Get Receptionists List",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": { "raw": "{{baseUrl}}/admin/receptionists", "host": ["{{baseUrl}}"], "path": ["admin", "receptionists"] }
-          }
-        },
-        {
-          "name": "Get Hotel Profile & Settings",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": { "raw": "{{baseUrl}}/admin/profile", "host": ["{{baseUrl}}"], "path": ["admin", "profile"] }
-          }
-        },
-        {
-          "name": "Get Revenue & Occupancy Reports",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": { "raw": "{{baseUrl}}/admin/reports", "host": ["{{baseUrl}}"], "path": ["admin", "reports"] }
-          }
-        }
-      ]
-    },
-    {
-      "name": "5. Receptionist (Front Desk Operations)",
-      "item": [
-        {
-          "name": "Front Desk Shift Dashboard",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": { "raw": "{{baseUrl}}/receptionist/dashboard", "host": ["{{baseUrl}}"], "path": ["receptionist", "dashboard"] }
-          }
-        },
-        {
-          "name": "Search Available Rooms",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": { "raw": "{{baseUrl}}/receptionist/rooms/available", "host": ["{{baseUrl}}"], "path": ["receptionist", "rooms", "available"] }
-          }
-        },
-        {
-          "name": "Register Guest with ID Proof (Aadhaar/Passport/DL)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"fullName\": \"Rajesh Kumar\",\n  \"mobileNumber\": \"+91 98250 12345\",\n  \"email\": \"rajesh.kumar@example.com\",\n  \"gender\": \"Male\",\n  \"nationality\": \"Indian\",\n  \"city\": \"Mumbai\",\n  \"state\": \"Maharashtra\",\n  \"idType\": \"AADHAAR\",\n  \"idNumber\": \"1234-5678-9012\"\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/receptionist/guests", "host": ["{{baseUrl}}"], "path": ["receptionist", "guests"] }
-          }
-        },
-        {
-          "name": "Verify Guest ID Proof",
-          "request": {
-            "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"status\": \"VERIFIED\",\n  \"verificationNotes\": \"Original Aadhaar card physically verified at check-in desk.\"\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/receptionist/guests/{{guestId}}/verify-id", "host": ["{{baseUrl}}"], "path": ["receptionist", "guests", "{{guestId}}", "verify-id"] }
-          }
-        },
-        {
-          "name": "Create Booking & Instant Check-In (with Advance)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"guestId\": \"{{guestId}}\",\n  \"roomId\": \"{{roomId}}\",\n  \"checkInDate\": \"2026-09-20\",\n  \"checkOutDate\": \"2026-09-23\",\n  \"adults\": 2,\n  \"children\": 0,\n  \"isInstantCheckIn\": true,\n  \"advancePaymentAmount\": 3000,\n  \"paymentMethod\": \"CASH\",\n  \"discountAmount\": 0,\n  \"specialRequests\": \"Quiet high-floor room preferred.\"\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/receptionist/bookings", "host": ["{{baseUrl}}"], "path": ["receptionist", "bookings"] }
-          }
-        },
-        {
-          "name": "Add Extra Charges (Room Service, Laundry, Mini-bar)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"type\": \"ROOM_SERVICE\",\n  \"title\": \"Gourmet Dinner & Drinks\",\n  \"amount\": 850,\n  \"quantity\": 1,\n  \"notes\": \"Delivered to Room 101\"\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/receptionist/bookings/{{bookingId}}/charges", "host": ["{{baseUrl}}"], "path": ["receptionist", "bookings", "{{bookingId}}", "charges"] }
-          }
-        },
-        {
-          "name": "Process Checkout & Collect Settlement Receipt",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"settlementPaymentAmount\": 2950,\n  \"paymentMethod\": \"UPI\"\n}"
-            },
-            "url": { "raw": "{{baseUrl}}/receptionist/bookings/{{bookingId}}/check-out", "host": ["{{baseUrl}}"], "path": ["receptionist", "bookings", "{{bookingId}}", "check-out"] }
-          }
-        },
-        {
-          "name": "Get All Guests List",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": { "raw": "{{baseUrl}}/receptionist/guests", "host": ["{{baseUrl}}"], "path": ["receptionist", "guests"] }
-          }
-        }
-      ]
-    }
-  ],
   "variable": [
     {
       "key": "baseUrl",
@@ -399,7 +12,7 @@
       "type": "string"
     },
     {
-      "key": "accessToken",
+      "key": "token",
       "value": "",
       "type": "string"
     },
@@ -414,12 +27,12 @@
       "type": "string"
     },
     {
-      "key": "roomTypeId",
+      "key": "roomId",
       "value": "",
       "type": "string"
     },
     {
-      "key": "roomId",
+      "key": "roomTypeId",
       "value": "",
       "type": "string"
     },
@@ -432,6 +45,2987 @@
       "key": "bookingId",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "receptionistId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "planId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "trialRequestId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sessionId",
+      "value": "sig_session_demo_12345",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. SaaS Platform Overview & Health",
+      "item": [
+        {
+          "name": "0.1 System Health & Modules Sitemap",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5000/",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": []
+            },
+            "description": "Returns health status of the API, WebSocket status, Background Email Queue status (Redis or In-Memory fallback), and module endpoint sitemaps."
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Authentication & Profile Management",
+      "item": [
+        {
+          "name": "1.1 Login (Super Admin / Hotel Admin / Receptionist)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.token || res.accessToken) {",
+                  "    pm.collectionVariables.set('token', res.token || res.accessToken);",
+                  "}",
+                  "if (res.refreshToken) {",
+                  "    pm.collectionVariables.set('refreshToken', res.refreshToken);",
+                  "}",
+                  "if (res.user && res.user.hotel) {",
+                  "    pm.collectionVariables.set('hotelId', res.user.hotel);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@thegrandpalace.com\",\n  \"password\": \"SecurePassword@123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "query": []
+            },
+            "description": "Authenticate Super Admin, Hotel Admin, or Receptionist.\n\n### Body Parameters:\n- `email` *(string, **Required**)*: Registered email address.\n- `password` *(string, **Required**)*: Plaintext account password.\n\n*Note: Automatically stores `token` and `refreshToken` in Postman collection variables on successful response.*"
+          }
+        },
+        {
+          "name": "1.2 Get Current Authenticated Profile (Me)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ],
+              "query": []
+            },
+            "description": "Fetches profile info of the logged-in user, assigned permissions, hotel tenant info, and subscription trial metrics."
+          }
+        },
+        {
+          "name": "1.3 Refresh Access Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.token || res.accessToken) {",
+                  "    pm.collectionVariables.set('token', res.token || res.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh-token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh-token"
+              ],
+              "query": []
+            },
+            "description": "Refreshes an expired JWT access token using the valid refresh token (either in body or HTTP-only cookie).\n\n### Body Parameters:\n- `refreshToken` *(string, *Optional if in cookie*)*: The active refresh token."
+          }
+        },
+        {
+          "name": "1.4 Change Password (Self)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"SecurePassword@123\",\n  \"newPassword\": \"NewSecretPassword@456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/change-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "change-password"
+              ],
+              "query": []
+            },
+            "description": "Change password for the currently logged-in user.\n\n### Body Parameters:\n- `currentPassword` *(string, **Required**)*: Existing password.\n- `newPassword` *(string, **Required**)*: New password (must be at least 6 characters)."
+          }
+        },
+        {
+          "name": "1.5 Forgot Password (Request 6-Digit OTP)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@thegrandpalace.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "forgot-password"
+              ],
+              "query": []
+            },
+            "description": "Generates and sends a 6-digit verification OTP to the user's registered email address.\n\n### Body Parameters:\n- `email` *(string, **Required**)*: Registered email address."
+          }
+        },
+        {
+          "name": "1.6 Verify Password Reset OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@thegrandpalace.com\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "verify-otp"
+              ],
+              "query": []
+            },
+            "description": "Validates if the provided 6-digit OTP is valid and unexpired.\n\n### Body Parameters:\n- `email` *(string, **Required**)*: Registered email address.\n- `otp` *(string, **Required**)*: 6-digit numeric OTP."
+          }
+        },
+        {
+          "name": "1.7 Reset Password with Verified OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@thegrandpalace.com\",\n  \"otp\": \"123456\",\n  \"newPassword\": \"BrandNewPassword@2026\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "reset-password"
+              ],
+              "query": []
+            },
+            "description": "Resets account password using the verified OTP.\n\n### Body Parameters:\n- `email` *(string, **Required**)*: Registered email address.\n- `otp` *(string, **Required**)*: 6-digit numeric OTP.\n- `newPassword` *(string, **Required**)*: New password."
+          }
+        },
+        {
+          "name": "1.8 Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ],
+              "query": []
+            },
+            "description": "Logs out the user and clears authentication cookie."
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Public & Multi-Tenant Hotel Portal",
+      "item": [
+        {
+          "name": "2.1 Register New Hotel & Activate Free Trial",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"The Grand Royale Palace\",\n  \"ownerName\": \"Vikramaditya Rathore\",\n  \"ownerEmail\": \"owner@thegrandroyale.com\",\n  \"ownerPhone\": \"+919876543210\",\n  \"address\": \"108 Palace Road, Near Lake Pichola\",\n  \"city\": \"Udaipur\",\n  \"state\": \"Rajasthan\",\n  \"country\": \"India\",\n  \"pincode\": \"313001\",\n  \"totalRooms\": 35,\n  \"hotelType\": \"Heritage Resort\",\n  \"gstNumber\": \"08AAAAA0000A1Z5\",\n  \"panNumber\": \"ABCDE1234F\",\n  \"website\": \"https://thegrandroyale.com\",\n  \"logo\": \"https://res.cloudinary.com/demo/image/upload/sample.jpg\",\n  \"idProofDocument\": \"https://res.cloudinary.com/demo/image/upload/id_doc.jpg\",\n  \"businessProofDocument\": \"https://res.cloudinary.com/demo/image/upload/business_proof.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/hotels/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "hotels",
+                "register"
+              ],
+              "query": []
+            },
+            "description": "Public registration endpoint for new hotel properties. Automatically provisions a Hotel Admin account, generates credentials, and starts a 30-day Free Trial.\n\n### Body Parameters:\n- `name` *(string, **Required**)*: Legal/trade name of hotel.\n- `ownerName` *(string, **Required**)*: Full name of owner.\n- `ownerEmail` *(string, **Required**)*: Owner email (must be globally unique).\n- `ownerPhone` *(string, **Required**)*: Contact phone number.\n- `address` *(string, **Required**)*: Physical street address.\n- `city` *(string, **Required**)*: City.\n- `state` *(string, **Required**)*: State.\n- `pincode` *(string, **Required**)*: 6-digit postal code.\n- `country` *(string, *Optional*, default: `\"India\"`)*: Country.\n- `totalRooms` *(number, *Optional*, default: `0`)*: Room inventory count.\n- `hotelType` *(string, *Optional*, default: `\"Boutique Hotel\"`)*: Category/Style of hotel.\n- `gstNumber` *(string, *Optional*)*: 15-character GSTIN.\n- `panNumber` *(string, *Optional*)*: 10-character Indian PAN.\n- `website` *(string, *Optional*)*: Website URL.\n- `logo` *(string URL, *Optional*)*: Logo image URL.\n- `idProofDocument` *(string URL, *Optional*)*: Owner KYC ID URL.\n- `businessProofDocument` *(string URL, *Optional*)*: Property license URL."
+          }
+        },
+        {
+          "name": "2.2 Request Trial Extension (Hotel Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requestedDays\": 30,\n  \"reason\": \"We are currently completing hotel staff training and front desk transition. Requesting 30 additional days before purchasing Annual Enterprise plan.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/hotels/request-trial-extension",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "hotels",
+                "request-trial-extension"
+              ],
+              "query": []
+            },
+            "description": "Hotel Admin submits a trial extension request. Instantly notifies Super Admin via WebSocket.\n\n### Body Parameters:\n- `requestedDays` *(number, *Optional*, default: `30`)*: Number of trial days requested.\n- `reason` *(string, **Required**)*: Detailed justification for trial extension."
+          }
+        },
+        {
+          "name": "2.3 Get Public Subscription Pricing Tiers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/subscription-plans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "subscription-plans"
+              ],
+              "query": []
+            },
+            "description": "Fetches active pricing tiers (Monthly & Annual plans) available for hotel admins to subscribe."
+          }
+        },
+        {
+          "name": "2.4 Get System Settings (Public / SaaS Website)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings"
+              ],
+              "query": []
+            },
+            "description": "Fetches global SaaS platform settings such as default free trial days/unit."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Super Admin Operations (Platform Governance)",
+      "item": [
+        {
+          "name": "3.1 Super Admin Analytics & KPI Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "dashboard"
+              ],
+              "query": []
+            },
+            "description": "Returns platform-wide statistics: total hotels, active, pending, revenue, monthly growth, bookings count, and pending dues."
+          }
+        },
+        {
+          "name": "3.2 List All Hotels",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/hotels?status=ALL&search=&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "hotels"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "ALL",
+                  "description": "Filter by: ALL, ACTIVE, PENDING_APPROVAL, SUSPENDED, DISABLED, EXPIRED"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Search by hotel name, owner name, email, or city"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Items per page"
+                }
+              ]
+            },
+            "description": "Paginated list of all hotel properties registered on the SaaS platform."
+          }
+        },
+        {
+          "name": "3.3 Get Single Hotel Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "hotels",
+                "{{hotelId}}"
+              ],
+              "query": []
+            },
+            "description": "Fetches complete details for a hotel including subscription, owner info, room counts, and active staff."
+          }
+        },
+        {
+          "name": "3.4 Update Hotel Details",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"The Grand Royale Heritage Palace\",\n  \"ownerName\": \"Vikramaditya Rathore\",\n  \"ownerPhone\": \"+919876543210\",\n  \"address\": \"108 Palace Road, Lake Pichola\",\n  \"city\": \"Udaipur\",\n  \"state\": \"Rajasthan\",\n  \"country\": \"India\",\n  \"pincode\": \"313001\",\n  \"totalRooms\": 45,\n  \"hotelType\": \"Heritage Resort\",\n  \"gstNumber\": \"08AAAAA0000A1Z5\",\n  \"panNumber\": \"ABCDE1234F\",\n  \"website\": \"https://thegrandroyale.com\",\n  \"logo\": \"https://res.cloudinary.com/demo/image/upload/logo.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "hotels",
+                "{{hotelId}}"
+              ],
+              "query": []
+            },
+            "description": "Updates master details of a hotel property."
+          }
+        },
+        {
+          "name": "3.5 Approve Hotel Property",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"remarks\": \"All documents verified. Hotel approved for live operations.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "hotels",
+                "{{hotelId}}",
+                "approve"
+              ],
+              "query": []
+            },
+            "description": "Approves a pending hotel registration and activates hotel operations."
+          }
+        },
+        {
+          "name": "3.6 Reject Hotel Property",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Invalid GST certificate and unverified address proof. Please re-register with valid legal documents.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "hotels",
+                "{{hotelId}}",
+                "reject"
+              ],
+              "query": []
+            },
+            "description": "Rejects a pending hotel registration.\n\n### Body Parameters:\n- `reason` *(string, **Required**)*: Explanation of rejection."
+          }
+        },
+        {
+          "name": "3.7 Change Hotel Operational Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\",\n  \"reason\": \"Account verified and unlocked after routine audit.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "hotels",
+                "{{hotelId}}",
+                "status"
+              ],
+              "query": []
+            },
+            "description": "Manually toggles a hotel status.\n\n### Body Parameters:\n- `status` *(string, **Required**)*: Allowed values: `ACTIVE`, `SUSPENDED`, `DISABLED`, `PENDING_APPROVAL`, `EXPIRED`.\n- `reason` *(string, *Optional*)*: Admin audit reason."
+          }
+        },
+        {
+          "name": "3.8 Extend Trial or Subscription",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"extensionType\": \"TRIAL\",\n  \"days\": 30,\n  \"customEndDate\": \"2026-12-31T23:59:59.000Z\",\n  \"plan\": \"MONTHLY_PRO\",\n  \"remarks\": \"Extended 30 days trial granted via customer success team.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}/extend-trial",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "hotels",
+                "{{hotelId}}",
+                "extend-trial"
+              ],
+              "query": []
+            },
+            "description": "Extends trial period or assigns a paid subscription plan to a hotel.\n\n### Body Parameters:\n- `extensionType` *(string, **Required**)*: `\"TRIAL\"` or `\"SUBSCRIPTION\"`.\n- `days` *(number, *Optional*)*: Additional days to extend.\n- `customEndDate` *(ISO date string, *Optional*)*: Specific calendar date for expiry.\n- `plan` *(string, *Optional*)*: Plan code.\n- `remarks` *(string, *Optional*)*: Audit notes."
+          }
+        },
+        {
+          "name": "3.9 Reset Hotel Admin Password",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newPassword\": \"AdminReset@2026\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}/reset-admin-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "hotels",
+                "{{hotelId}}",
+                "reset-admin-password"
+              ],
+              "query": []
+            },
+            "description": "Resets the Hotel Admin password. If `newPassword` is omitted, auto-generates a secure password and emails the owner."
+          }
+        },
+        {
+          "name": "3.10 View Hotel Guests Roster",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/hotels/{{hotelId}}/guests?page=1&limit=20&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "hotels",
+                "{{hotelId}}",
+                "guests"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": ""
+                }
+              ]
+            },
+            "description": "Super Admin audit endpoint to view all guest stay records for a specific hotel property."
+          }
+        },
+        {
+          "name": "3.11 Platform Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/audit-logs?module=HOTELS&page=1&limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "audit-logs"
+              ],
+              "query": [
+                {
+                  "key": "module",
+                  "value": "HOTELS",
+                  "description": "Filter by: HOTELS, AUTH, SUBSCRIPTIONS, SYSTEM"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Security and compliance audit trail across all administrative operations."
+          }
+        },
+        {
+          "name": "3.12 List Trial Requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/trial-requests?status=PENDING",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "trial-requests"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "PENDING",
+                  "description": "Filter by: PENDING, APPROVED, REJECTED"
+                }
+              ]
+            },
+            "description": "Lists all trial extension requests submitted by hotel admins."
+          }
+        },
+        {
+          "name": "3.13 Approve Trial Request",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approvedDays\": 30,\n  \"remarks\": \"Approved for 30 additional days.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/trial-requests/{{trialRequestId}}/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "trial-requests",
+                "{{trialRequestId}}",
+                "approve"
+              ],
+              "query": []
+            },
+            "description": "Approves a pending trial extension request and automatically extends the hotel's trial end date."
+          }
+        },
+        {
+          "name": "3.14 Reject Trial Request",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"remarks\": \"Hotel has already used maximum trial extension allowances. Please select a subscription plan.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/trial-requests/{{trialRequestId}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "trial-requests",
+                "{{trialRequestId}}",
+                "reject"
+              ],
+              "query": []
+            },
+            "description": "Rejects a trial extension request."
+          }
+        },
+        {
+          "name": "3.15 List All Subscription Plans (Super Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/subscription-plans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "subscription-plans"
+              ],
+              "query": []
+            },
+            "description": "Fetches all subscription plans (both active and inactive) with subscriber metrics."
+          }
+        },
+        {
+          "name": "3.16 Create Subscription Plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Boutique Executive\",\n  \"code\": \"MONTHLY_EXEC\",\n  \"billingCycle\": \"MONTHLY\",\n  \"price\": 7499,\n  \"discountPercent\": 0,\n  \"maxRooms\": 25,\n  \"description\": \"Targeted for premium heritage boutique properties up to 25 rooms.\",\n  \"features\": [\n    \"Up to 25 Rooms Inventory\",\n    \"Front Desk & Instant Walk-in Wizard\",\n    \"Govt ID Compliance & Police Ledger\",\n    \"Priority Support\"\n  ],\n  \"badge\": \"NEW\",\n  \"isPopular\": false,\n  \"isActive\": true,\n  \"displayOrder\": 2\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/subscription-plans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "subscription-plans"
+              ],
+              "query": []
+            },
+            "description": "Creates a new subscription tier. (Enforces strict SaaS rule: Maximum 3 Monthly + 3 Annual = 6 total active plans).\n\n### Body Parameters:\n- `name` *(string, **Required**)*: Plan title.\n- `billingCycle` *(string, **Required**)*: `\"MONTHLY\"` or `\"ANNUAL\"`.\n- `price` *(number, **Required**)*: Price in INR.\n- `maxRooms` *(number, *Optional*, default: `50`)*: Room limit.\n- `discountPercent` *(number, *Optional*, default: `0`)*: Discount %.\n- `features` *(array of strings, *Optional*)*: Feature bullets."
+          }
+        },
+        {
+          "name": "3.17 Update Subscription Plan",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 6999,\n  \"discountPercent\": 10,\n  \"maxRooms\": 30,\n  \"description\": \"Updated pricing tier with promotional discount.\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/subscription-plans/{{planId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "subscription-plans",
+                "{{planId}}"
+              ],
+              "query": []
+            },
+            "description": "Updates an existing subscription plan."
+          }
+        },
+        {
+          "name": "3.18 Delete Subscription Plan",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/subscription-plans/{{planId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "subscription-plans",
+                "{{planId}}"
+              ],
+              "query": []
+            },
+            "description": "Soft deletes / archives a subscription plan."
+          }
+        },
+        {
+          "name": "3.19 Reset Default 6 Subscription Plans",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/super-admin/subscription-plans/reset-defaults",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "super-admin",
+                "subscription-plans",
+                "reset-defaults"
+              ],
+              "query": []
+            },
+            "description": "Resets the subscription plans database back to the official 6 default SaaS tiers (3 Monthly + 3 Annual)."
+          }
+        },
+        {
+          "name": "3.20 Update System Settings (Super Admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"freeTrialValue\": 30,\n  \"freeTrialUnit\": \"days\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings"
+              ],
+              "query": []
+            },
+            "description": "Updates default free trial duration applied to newly registered hotels.\n\n### Body Parameters:\n- `freeTrialValue` *(number, **Required**)*: Quantity (e.g. `30` or `72`).\n- `freeTrialUnit` *(string, **Required**)*: `\"days\"` or `\"hours\"`."
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Hotel Admin Management",
+      "item": [
+        {
+          "name": "4.1 Hotel Executive Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "dashboard"
+              ],
+              "query": []
+            },
+            "description": "Returns real-time KPIs: room occupancy, available rooms, cleaning status, today check-ins/outs, and revenue."
+          }
+        },
+        {
+          "name": "4.2 Revenue & Growth Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/revenue-details",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "revenue-details"
+              ],
+              "query": []
+            },
+            "description": "Comprehensive financial analytics: daily, weekly, monthly collections, cash drawer breakdown, and payment methods."
+          }
+        },
+        {
+          "name": "4.3 Get Hotel Profile & Configurations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "profile"
+              ],
+              "query": []
+            },
+            "description": "Fetches hotel details, policies, GST/PAN credentials, and front-desk settings."
+          }
+        },
+        {
+          "name": "4.4 Update Hotel Profile & Policies",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"The Grand Royale Heritage Palace\",\n  \"ownerPhone\": \"+919876543210\",\n  \"address\": \"108 Palace Road, Lake Pichola\",\n  \"city\": \"Udaipur\",\n  \"state\": \"Rajasthan\",\n  \"pincode\": \"313001\",\n  \"gstNumber\": \"08AAAAA0000A1Z5\",\n  \"panNumber\": \"ABCDE1234F\",\n  \"logo\": \"https://res.cloudinary.com/demo/image/upload/logo.jpg\",\n  \"website\": \"https://thegrandroyale.com\",\n  \"settings\": {\n    \"checkInTime\": \"14:00\",\n    \"checkOutTime\": \"12:00\",\n    \"currency\": \"INR\",\n    \"taxPercentage\": 12,\n    \"policies\": [\n      \"Standard Check-Out is strictly 12:00 PM (Noon).\",\n      \"Government photo ID is required for all staying guests.\",\n      \"All indoor rooms and corridors are 100% smoke-free zones.\",\n      \"Quiet hours are observed between 10:00 PM and 07:00 AM.\"\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "profile"
+              ],
+              "query": []
+            },
+            "description": "Updates hotel profile, check-in/out policies, and branding."
+          }
+        },
+        {
+          "name": "4.5 List Room Types / Categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/room-types",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "room-types"
+              ],
+              "query": []
+            },
+            "description": "Lists all room categories (Deluxe, Suite, Standard, etc.) with current pricing and capacity."
+          }
+        },
+        {
+          "name": "4.6 Create Room Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Royal Heritage Suite\",\n  \"basePrice\": 5500,\n  \"shortCode\": \"RHS\",\n  \"capacity\": {\n    \"adults\": 2,\n    \"children\": 2\n  },\n  \"gstRate\": 12,\n  \"description\": \"Spacious palace-facing suite with king-size bed, private balcony, and clawfoot bathtub.\",\n  \"amenities\": [\n    \"Free High-Speed Wi-Fi\",\n    \"King Size Bed\",\n    \"Lake View Balcony\",\n    \"Air Conditioning\",\n    \"Mini Bar\",\n    \"Complimentary Breakfast\"\n  ],\n  \"images\": [\n    \"https://res.cloudinary.com/demo/image/upload/suite1.jpg\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/room-types",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "room-types"
+              ],
+              "query": []
+            },
+            "description": "Creates a new room category.\n\n### Body Parameters:\n- `name` *(string, **Required**)*: Category title.\n- `basePrice` *(number, **Required**)*: Base tariff per night in INR.\n- `capacity` *(object, *Optional*)*: `{ adults: 2, children: 1 }`.\n- `gstRate` *(number, *Optional*, default: `12`)*: GST % (12 or 18).\n- `shortCode` *(string, *Optional*)*: Code abbreviation.\n- `amenities` *(array of strings, *Optional*)*: Amenities list."
+          }
+        },
+        {
+          "name": "4.7 Update Room Type",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"basePrice\": 5800,\n  \"gstRate\": 12,\n  \"amenities\": [\n    \"Free High-Speed Wi-Fi\",\n    \"King Size Bed\",\n    \"Lake View Balcony\",\n    \"Air Conditioning\",\n    \"Mini Bar\",\n    \"Smart 4K TV\",\n    \"Complimentary Breakfast\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/room-types/{{roomTypeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "room-types",
+                "{{roomTypeId}}"
+              ],
+              "query": []
+            },
+            "description": "Updates details or pricing of a room category."
+          }
+        },
+        {
+          "name": "4.8 Delete Room Type",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/room-types/{{roomTypeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "room-types",
+                "{{roomTypeId}}"
+              ],
+              "query": []
+            },
+            "description": "Deletes a room category (safely guarded if rooms are linked)."
+          }
+        },
+        {
+          "name": "4.9 List Hotel Rooms Inventory",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/rooms?status=ALL&floor=&roomType=&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "rooms"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "ALL",
+                  "description": "Filter by: ALL, AVAILABLE, OCCUPIED, CLEANING, MAINTENANCE, BLOCKED"
+                },
+                {
+                  "key": "floor",
+                  "value": "",
+                  "description": "Filter by floor number"
+                },
+                {
+                  "key": "roomType",
+                  "value": "",
+                  "description": "Filter by Room Type ID"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Search by room number"
+                }
+              ]
+            },
+            "description": "Retrieves all physical hotel rooms with live status, current guest name, and pricing."
+          }
+        },
+        {
+          "name": "4.10 Create New Physical Room",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roomNumber\": \"301\",\n  \"roomType\": \"{{roomTypeId}}\",\n  \"floor\": \"3\",\n  \"pricePerNight\": 5500,\n  \"cleaningDurationMinutes\": 15,\n  \"status\": \"AVAILABLE\",\n  \"amenities\": [\n    \"Lake View Balcony\",\n    \"King Size Bed\",\n    \"Mini Bar\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/rooms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "rooms"
+              ],
+              "query": []
+            },
+            "description": "Creates an individual physical room.\n\n### Body Parameters:\n- `roomNumber` *(string, **Required**)*: Unique room number (e.g. `\"301\"`).\n- `roomType` *(ObjectId string, **Required**)*: Category ID.\n- `floor` *(string, *Optional*)*: Floor identifier.\n- `pricePerNight` *(number, *Optional*)*: Custom tariff override.\n- `cleaningDurationMinutes` *(number, *Optional*, default: `15`)*: Housekeeping duration."
+          }
+        },
+        {
+          "name": "4.11 Update Physical Room",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pricePerNight\": 5800,\n  \"floor\": \"3\",\n  \"status\": \"AVAILABLE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/rooms/{{roomId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "rooms",
+                "{{roomId}}"
+              ],
+              "query": []
+            },
+            "description": "Updates room configuration or pricing override."
+          }
+        },
+        {
+          "name": "4.12 Delete Room",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/rooms/{{roomId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "rooms",
+                "{{roomId}}"
+              ],
+              "query": []
+            },
+            "description": "Deletes room (safely prevented if active bookings exist)."
+          }
+        },
+        {
+          "name": "4.13 Update Physical Room Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CLEANING\",\n  \"reason\": \"Daily scheduled housekeeping & linen sanitization.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/rooms/{{roomId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "rooms",
+                "{{roomId}}",
+                "status"
+              ],
+              "query": []
+            },
+            "description": "Changes physical room status.\n\n### Body Parameters:\n- `status` *(string, **Required**)*: `AVAILABLE`, `OCCUPIED`, `CLEANING`, `MAINTENANCE`, `OUT_OF_ORDER`, `BLOCKED`.\n- `reason` *(string, *Optional*)*: Context note."
+          }
+        },
+        {
+          "name": "4.14 List Front Desk Staff / Receptionists",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/receptionists",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "receptionists"
+              ],
+              "query": []
+            },
+            "description": "Lists all receptionist accounts created under this hotel."
+          }
+        },
+        {
+          "name": "4.15 Create Receptionist Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Rohit Sharma\",\n  \"email\": \"rohit.reception@thegrandroyale.com\",\n  \"phone\": \"+919811223344\",\n  \"shiftTiming\": \"Morning Shift (07:00 AM - 03:00 PM)\",\n  \"password\": \"StaffPassword@123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/receptionists",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "receptionists"
+              ],
+              "query": []
+            },
+            "description": "Provisions a new front-desk receptionist staff user.\n\n### Body Parameters:\n- `name` *(string, **Required**)*: Staff member full name.\n- `email` *(string, **Required**)*: Staff login email (unique).\n- `password` *(string, *Optional*, auto-generated if blank)*: Initial password.\n- `phone` *(string, *Optional*)*: Contact number.\n- `shiftTiming` *(string, *Optional*)*: Working shift description."
+          }
+        },
+        {
+          "name": "4.16 Update Receptionist Account",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Rohit Sharma\",\n  \"phone\": \"+919811223344\",\n  \"shiftTiming\": \"Evening Shift (03:00 PM - 11:00 PM)\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/receptionists/{{receptionistId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "receptionists",
+                "{{receptionistId}}"
+              ],
+              "query": []
+            },
+            "description": "Updates receptionist profile or shift schedule."
+          }
+        },
+        {
+          "name": "4.17 Delete Receptionist Account",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/receptionists/{{receptionistId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "receptionists",
+                "{{receptionistId}}"
+              ],
+              "query": []
+            },
+            "description": "Removes a receptionist account."
+          }
+        },
+        {
+          "name": "4.18 Toggle Receptionist Active Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isActive\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/receptionists/{{receptionistId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "receptionists",
+                "{{receptionistId}}",
+                "status"
+              ],
+              "query": []
+            },
+            "description": "Enables or disables receptionist access without deleting their account record."
+          }
+        },
+        {
+          "name": "4.19 Hotel Financial & Operations Reports",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/reports?type=revenue&startDate=2026-10-01&endDate=2026-10-08",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "reports"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "revenue",
+                  "description": "Report type: revenue, occupancy, guests, monthly"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2026-10-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-10-08"
+                }
+              ]
+            },
+            "description": "Generates comprehensive accounting and occupancy reports across custom date ranges."
+          }
+        },
+        {
+          "name": "4.20 Hotel Guests Roster",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/guests?search=&status=ALL&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "guests"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "status",
+                  "value": "ALL"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Retrieves complete guest stay history, visits count, and outstanding balance."
+          }
+        },
+        {
+          "name": "4.21 Single Guest Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/guests/{{guestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "guests",
+                "{{guestId}}"
+              ],
+              "query": []
+            },
+            "description": "Detailed guest profile including KYC verification status, Aadhaar/Passport proof images, and past bookings ledger."
+          }
+        },
+        {
+          "name": "4.22 Generate Guest Stay Folio PDF",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/guests/{{guestId}}/folio-pdf",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "guests",
+                "{{guestId}}",
+                "folio-pdf"
+              ],
+              "query": []
+            },
+            "description": "Compiles itemized room tariff, taxes, POS extras, advance payments, and digital cashier seal into a downloadable PDF and returns the URL."
+          }
+        },
+        {
+          "name": "4.23 Payment Ledger & Transaction History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/payments?paymentMethod=ALL&paymentType=ALL&startDate=2026-10-01&endDate=2026-10-08&page=1&limit=30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "payments"
+              ],
+              "query": [
+                {
+                  "key": "paymentMethod",
+                  "value": "ALL",
+                  "description": "Filter: ALL, CASH, UPI, CARD, NET_BANKING"
+                },
+                {
+                  "key": "paymentType",
+                  "value": "ALL",
+                  "description": "Filter: ALL, ADVANCE, PARTIAL, FULL_SETTLEMENT, EXTRA_CHARGE"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2026-10-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-10-08"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "30"
+                }
+              ]
+            },
+            "description": "Detailed receipts and financial audit ledger."
+          }
+        },
+        {
+          "name": "4.24 Record Direct Payment Transaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": \"{{bookingId}}\",\n  \"guestId\": \"{{guestId}}\",\n  \"amount\": 2500,\n  \"paymentMethod\": \"UPI\",\n  \"paymentType\": \"PARTIAL\",\n  \"transactionId\": \"UPI/382910294821/PAYTM\",\n  \"note\": \"Mid-stay part payment received via UPI QR\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "payments"
+              ],
+              "query": []
+            },
+            "description": "Records an offline or online payment directly into the booking ledger.\n\n### Body Parameters:\n- `amount` *(number, **Required**)*: Payment sum.\n- `paymentMethod` *(string, **Required**)*: `CASH`, `UPI`, `CARD`, `NET_BANKING`, `CHEQUE`.\n- `paymentType` *(string, *Optional*)*: `ADVANCE`, `PARTIAL`, `FULL_SETTLEMENT`, `EXTRA_CHARGE`.\n- `bookingId` *(ObjectId, *Optional*)*: Associated booking.\n- `guestId` *(ObjectId, *Optional*)*: Associated guest.\n- `transactionId` *(string, *Optional*)*: Bank reference.\n- `note` *(string, *Optional*)*: Receipt memo."
+          }
+        },
+        {
+          "name": "4.25 Daily Collections Reconciliation",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/daily-collections?date=2026-10-08",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "daily-collections"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2026-10-08",
+                  "description": "YYYY-MM-DD date to reconcile"
+                }
+              ]
+            },
+            "description": "Reconciles front desk physical cash drawer, digital UPI receipts, card swipes, and handover status."
+          }
+        },
+        {
+          "name": "4.26 Settle Shift Cash Drawer Handover",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"2026-10-08\",\n  \"cashHandoverAmount\": 14500,\n  \"nextShiftStaffName\": \"Sunil Verma\",\n  \"notes\": \"Morning shift cash drawer verified and handed over to evening cashier.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/daily-collections/handover",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "daily-collections",
+                "handover"
+              ],
+              "query": []
+            },
+            "description": "Submits shift closing cash drawer reconciliation.\n\n### Body Parameters:\n- `date` *(string YYYY-MM-DD, **Required**)*: Shift date.\n- `cashHandoverAmount` *(number, **Required**)*: Counted physical cash amount.\n- `nextShiftStaffName` *(string, *Optional*)*: Relieving staff name.\n- `notes` *(string, *Optional*)*: Shift closing notes."
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Front Desk & Receptionist Operations",
+      "item": [
+        {
+          "name": "5.1 Receptionist Live Matrix Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "dashboard"
+              ],
+              "query": []
+            },
+            "description": "Front desk visual room matrix, active walk-ins, cleaning status, and arrivals/departures count."
+          }
+        },
+        {
+          "name": "5.2 Check Available Rooms for Stay Dates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/rooms/available?checkInDate=2026-10-08&checkOutDate=2026-10-09&roomType=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "rooms",
+                "available"
+              ],
+              "query": [
+                {
+                  "key": "checkInDate",
+                  "value": "2026-10-08",
+                  "description": "YYYY-MM-DD"
+                },
+                {
+                  "key": "checkOutDate",
+                  "value": "2026-10-09",
+                  "description": "YYYY-MM-DD"
+                },
+                {
+                  "key": "roomType",
+                  "value": "",
+                  "description": "Optional Room Type ID filter"
+                }
+              ]
+            },
+            "description": "Calculates available rooms taking into account physical occupied rooms, advance reservations, cleaning turnaround, and maintenance guards."
+          }
+        },
+        {
+          "name": "5.3 Get Booking Room Options (Wizard Dropdowns)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/booking/room-options",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "booking",
+                "room-options"
+              ],
+              "query": []
+            },
+            "description": "Provides pre-populated list of rooms, room types, and rates for check-in wizard dropdowns."
+          }
+        },
+        {
+          "name": "5.4 Get Room Categories List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/room-types",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "room-types"
+              ],
+              "query": []
+            },
+            "description": "List of room categories with pricing for front desk."
+          }
+        },
+        {
+          "name": "5.5 Fast Guest Search / Auto-fill Lookup",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/guests/lookup?query=9876543210",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "guests",
+                "lookup"
+              ],
+              "query": [
+                {
+                  "key": "query",
+                  "value": "9876543210",
+                  "description": "Search by phone number, email, or guest name"
+                }
+              ]
+            },
+            "description": "Instantly auto-fills repeating guest profiles, KYC ID numbers, past stay preferences, and VIP tags."
+          }
+        },
+        {
+          "name": "5.6 List All Guests",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/guests?search=&status=ALL&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "guests"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "status",
+                  "value": "ALL"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Lists all guests with stay history, verification status, and contact details."
+          }
+        },
+        {
+          "name": "5.7 Get Single Guest Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/guests/{{guestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "guests",
+                "{{guestId}}"
+              ],
+              "query": []
+            },
+            "description": "Detailed guest stay dossier, past stays, ID documents, and signature."
+          }
+        },
+        {
+          "name": "5.8 Generate Guest Stay Folio PDF",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/guests/{{guestId}}/folio-pdf",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "guests",
+                "{{guestId}}",
+                "folio-pdf"
+              ],
+              "query": []
+            },
+            "description": "Generates branded PDF folio with QR code, tax invoice breakdown, and cashier signature. Returns the direct PDF URL."
+          }
+        },
+        {
+          "name": "5.9 Register New Guest Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Ananya Deshmukh\",\n  \"mobileNumber\": \"+919822334455\",\n  \"email\": \"ananya.deshmukh@example.com\",\n  \"gender\": \"Female\",\n  \"address\": \"Flat 402, Green Meadows, Koregaon Park\",\n  \"city\": \"Pune\",\n  \"state\": \"Maharashtra\",\n  \"nationality\": \"Indian\",\n  \"idType\": \"AADHAAR\",\n  \"idNumber\": \"987654321098\",\n  \"frontImage\": \"https://res.cloudinary.com/demo/image/upload/aadhaar_front.jpg\",\n  \"backImage\": \"https://res.cloudinary.com/demo/image/upload/aadhaar_back.jpg\",\n  \"accompanyingGuests\": [\n    {\n      \"fullName\": \"Karan Deshmukh\",\n      \"age\": 32,\n      \"gender\": \"Male\",\n      \"relationship\": \"Spouse\",\n      \"idType\": \"AADHAAR\",\n      \"idNumber\": \"123456789012\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/guests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "guests"
+              ],
+              "query": []
+            },
+            "description": "Registers guest profile and uploads KYC ID documents.\n\n### Body Parameters:\n- `fullName` *(string, **Required**)*: Primary guest full name.\n- `mobileNumber` *(string, **Required**)*: Phone number.\n- `idType` *(string, *Optional*)*: `AADHAAR`, `PAN`, `PASSPORT`, `DRIVING_LICENSE`, `VOTER_ID`.\n- `idNumber` *(string, *Optional*)*: Identification number.\n- `frontImage` *(string URL/base64, *Optional*)*: Front ID photo.\n- `backImage` *(string URL/base64, *Optional*)*: Back ID photo.\n- `accompanyingGuests` *(array, *Optional*)*: Additional family/group members."
+          }
+        },
+        {
+          "name": "5.10 Verify Guest Govt ID Proof",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"verificationStatus\": \"VERIFIED\",\n  \"remarks\": \"Original Aadhaar card physically verified at check-in counter.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/guests/{{guestId}}/verify-id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "guests",
+                "{{guestId}}",
+                "verify-id"
+              ],
+              "query": []
+            },
+            "description": "Updates verification status of guest identification document."
+          }
+        },
+        {
+          "name": "5.11 Save Guest Digital Signature",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"signature\": \"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==\",\n  \"signedBy\": \"Ananya Deshmukh\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/guests/{{guestId}}/signature",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "guests",
+                "{{guestId}}",
+                "signature"
+              ],
+              "query": []
+            },
+            "description": "Stores guest touch-screen or stylus digital signature on the guest profile."
+          }
+        },
+        {
+          "name": "5.12 Zero-OTP KYC OCR Automated Verification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"image\": \"https://res.cloudinary.com/demo/image/upload/sample_aadhaar.jpg\",\n  \"idType\": \"AADHAAR\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/kyc/ocr-verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "kyc",
+                "ocr-verify"
+              ],
+              "query": []
+            },
+            "description": "Zero-OTP automated KYC: extracts text, ID numbers, name, and DOB using Surepass OCR API and local OCR engine.\n\n### Body Parameters:\n- `image` *(string URL or base64, **Required**)*: Image of document.\n- `idType` *(string, *Optional*)*: `AADHAAR`, `PAN`, `PASSPORT`, `VOTER_ID`, `DRIVING_LICENSE`."
+          }
+        },
+        {
+          "name": "5.13 Automated Driving License Verification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"licenseNumber\": \"MH1220180012345\",\n  \"dob\": \"1992-05-18\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/kyc/verify-driving-license",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "kyc",
+                "verify-driving-license"
+              ],
+              "query": []
+            },
+            "description": "Direct government database verification for Indian Driving Licenses.\n\n### Body Parameters:\n- `licenseNumber` *(string, **Required**)*: DL number.\n- `dob` *(string YYYY-MM-DD, **Required**)*: Date of birth."
+          }
+        },
+        {
+          "name": "5.14 List Bookings & Stays",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/bookings?status=ALL&search=&startDate=2026-10-01&endDate=2026-10-08&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "bookings"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "ALL",
+                  "description": "Filter: ALL, CHECKED_IN, CONFIRMED, CHECKED_OUT, CANCELLED"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Search by booking number, guest name, or room number"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2026-10-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-10-08"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Lists all bookings with live status, room allocation, stay dates, and payment balances."
+          }
+        },
+        {
+          "name": "5.15 Create Booking or Instant Check-In Wizard",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"guestName\": \"Ananya Deshmukh\",\n  \"guestPhone\": \"+919822334455\",\n  \"guestEmail\": \"ananya.deshmukh@example.com\",\n  \"guestAddress\": \"Flat 402, Green Meadows\",\n  \"guestCity\": \"Pune\",\n  \"guestState\": \"Maharashtra\",\n  \"guestCountry\": \"India\",\n  \"guestIdType\": \"AADHAAR\",\n  \"guestIdNumber\": \"987654321098\",\n  \"roomIds\": [\n    \"{{roomId}}\"\n  ],\n  \"checkInDate\": \"2026-10-08\",\n  \"checkOutDate\": \"2026-10-10\",\n  \"checkInTime\": \"14:00\",\n  \"checkOutTime\": \"12:00\",\n  \"numberOfAdults\": 2,\n  \"numberOfChildren\": 1,\n  \"advancePayment\": 3000,\n  \"paymentMethod\": \"UPI\",\n  \"transactionId\": \"UPI/8392019481/HDFC\",\n  \"bookingStatus\": \"CHECKED_IN\",\n  \"specialRequests\": \"Lake view room on top floor requested. Extra pillow.\",\n  \"signature\": \"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==\",\n  \"accompanyingGuests\": [\n    {\n      \"fullName\": \"Karan Deshmukh\",\n      \"age\": 32,\n      \"gender\": \"Male\",\n      \"relationship\": \"Spouse\",\n      \"idType\": \"AADHAAR\",\n      \"idNumber\": \"123456789012\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/bookings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "bookings"
+              ],
+              "query": []
+            },
+            "description": "Creates a booking or instantly checks in a guest.\n\n### Body Parameters:\n- `guestName` *(string, **Required**)*: Primary guest name.\n- `guestPhone` *(string, **Required**)*: Phone number.\n- `roomIds` *(array of ObjectId strings, **Required**)*: List of allocated room IDs.\n- `checkInDate` *(string YYYY-MM-DD, **Required**)*: Check-in date.\n- `checkOutDate` *(string YYYY-MM-DD, **Required**)*: Check-out date.\n- `bookingStatus` *(string, *Optional*, default: `\"CHECKED_IN\"`)*: `\"CHECKED_IN\"` for instant walk-in or `\"CONFIRMED\"` for advance reservation.\n- `advancePayment` *(number, *Optional*, default: `0`)*: Amount paid at front desk.\n- `paymentMethod` *(string, *Optional*)*: `\"CASH\"`, `\"UPI\"`, `\"CARD\"`, `\"NET_BANKING\"`.\n- `accompanyingGuests` *(array, *Optional*)*: Accompanying group members.\n- `signature` *(string base64, *Optional*)*: Digital signature captured on screen."
+          }
+        },
+        {
+          "name": "5.16 Add In-Room / POS Extra Charge",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chargeType\": \"FOOD\",\n  \"description\": \"Room Service: 2x Royal Rajasthani Thali + 2x Fresh Lime Soda\",\n  \"amount\": 1450,\n  \"taxRate\": 5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/bookings/{{bookingId}}/charges",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "bookings",
+                "{{bookingId}}",
+                "charges"
+              ],
+              "query": []
+            },
+            "description": "Adds ancillary charges (Food, Laundry, Spa, Extra Bed, Damage) directly onto the guest's folio ledger.\n\n### Body Parameters:\n- `chargeType` *(string, **Required**)*: `FOOD`, `LAUNDRY`, `SPA`, `ROOM_SERVICE`, `LATE_CHECKOUT`, `DAMAGE`, `OTHER`.\n- `description` *(string, **Required**)*: Itemized bill description.\n- `amount` *(number, **Required**)*: Charge amount in INR.\n- `taxRate` *(number, *Optional*, default: `0`)*: Applicable tax %."
+          }
+        },
+        {
+          "name": "5.17 Settle Dues & Process Guest Check-Out",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"settlementPaymentAmount\": 5450,\n  \"paymentMethod\": \"CASH\",\n  \"lateCheckoutFee\": 500,\n  \"lateCheckoutType\": \"hourly\",\n  \"lateCheckoutHours\": 2,\n  \"lateCheckoutMinutes\": 0\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/bookings/{{bookingId}}/check-out",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "bookings",
+                "{{bookingId}}",
+                "check-out"
+              ],
+              "query": []
+            },
+            "description": "Completes final financial settlement, late checkout charges, marks booking as CHECKED_OUT, and automatically triggers housekeeping 15-minute turnaround timer for all allocated rooms.\n\n### Body Parameters:\n- `settlementPaymentAmount` *(number, *Optional*)*: Payment collected at checkout desk.\n- `paymentMethod` *(string, *Optional*)*: `CASH`, `UPI`, `CARD`.\n- `lateCheckoutFee` *(number, *Optional*)*: Late checkout fee.\n- `lateCheckoutType` *(string, *Optional*)*: `hourly`, `half_day`, `full_day`, `none`."
+          }
+        },
+        {
+          "name": "5.18 Save Booking Signature",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"signature\": \"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==\",\n  \"signedBy\": \"Ananya Deshmukh\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/bookings/{{bookingId}}/signature",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "bookings",
+                "{{bookingId}}",
+                "signature"
+              ],
+              "query": []
+            },
+            "description": "Saves digital signature on a specific booking document."
+          }
+        },
+        {
+          "name": "5.19 View Payment Collections Ledger",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/payments?page=1&limit=30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "payments"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "30"
+                }
+              ]
+            },
+            "description": "Receptionist view of all payment receipts collected during shifts."
+          }
+        },
+        {
+          "name": "5.20 Record Direct Payment Entry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": \"{{bookingId}}\",\n  \"amount\": 2000,\n  \"paymentMethod\": \"CASH\",\n  \"paymentType\": \"PARTIAL\",\n  \"note\": \"Cash payment collected by front desk receptionist\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "payments"
+              ],
+              "query": []
+            },
+            "description": "Records a payment receipt for a stay."
+          }
+        },
+        {
+          "name": "5.21 View Daily Collections & Cash Drawer",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/daily-collections?date=2026-10-08",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "daily-collections"
+              ],
+              "query": [
+                {
+                  "key": "date",
+                  "value": "2026-10-08"
+                }
+              ]
+            },
+            "description": "Reconciles front desk physical cash drawer against digital receipts for today's shift."
+          }
+        },
+        {
+          "name": "5.22 Complete Shift Handover & Cash Settlement",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text",
+                "description": "JWT Access Token obtained from /auth/login"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"2026-10-08\",\n  \"cashHandoverAmount\": 12000,\n  \"nextShiftStaffName\": \"Sunil Verma\",\n  \"notes\": \"Shift handover completed. All cash counted and handed over.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/receptionist/daily-collections/handover",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "receptionist",
+                "daily-collections",
+                "handover"
+              ],
+              "query": []
+            },
+            "description": "Submits physical cash handover to next receptionist or hotel manager."
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Digital Signature Mobile Sync (QR / Real-Time)",
+      "item": [
+        {
+          "name": "6.1 Check Signature Status (Poll or Session Lookup)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/signature-sync?session=%7B%7BsessionId%7D%7D",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "signature-sync"
+              ],
+              "query": [
+                {
+                  "key": "session",
+                  "value": "{{sessionId}}",
+                  "description": "Unique signature session token from QR code"
+                }
+              ]
+            },
+            "description": "Checks if a guest has submitted their signature on their mobile device for the given session ID."
+          }
+        },
+        {
+          "name": "6.2 Get Host Network Info for Mobile Pairing",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/signature-sync?action=network-info",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "signature-sync"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "network-info",
+                  "description": "Returns local network IP and port for local WiFi mobile pairing"
+                }
+              ]
+            },
+            "description": "Returns local IP address and URL so guests on the hotel's local WiFi can scan the QR code to open the signing pad on their phones."
+          }
+        },
+        {
+          "name": "6.3 Submit Mobile Digital Signature",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"signature\": \"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==\",\n  \"guestName\": \"Ananya Deshmukh\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/signature-sync",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "signature-sync"
+              ],
+              "query": []
+            },
+            "description": "Mobile signature pad posts the guest signature back to the server. Instantly broadcasts to the receptionist terminal via WebSockets."
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. File & Media Uploads (Cloudinary CDN)",
+      "item": [
+        {
+          "name": "7.1 Upload Single File (Multipart or Base64)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "description": "Select image (JPG, PNG, WEBP) or PDF document"
+                },
+                {
+                  "key": "folder",
+                  "value": "hotel_guest_documents",
+                  "type": "text",
+                  "description": "Target folder in Cloudinary"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/upload",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "upload"
+              ],
+              "query": []
+            },
+            "description": "Uploads a single photo or PDF file to Cloudinary. Also supports base64 payload in JSON mode (`{ \"base64\": \"data:...\", \"folder\": \"...\" }`)."
+          }
+        },
+        {
+          "name": "7.2 Upload Multiple Documents (Array)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "files",
+                  "type": "file",
+                  "description": "Select multiple image or PDF files (up to 10)"
+                },
+                {
+                  "key": "folder",
+                  "value": "hotel_guest_documents",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/upload/multiple",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "upload",
+                "multiple"
+              ],
+              "query": []
+            },
+            "description": "Batch uploads multiple ID proofs or hotel photos to Cloudinary CDN simultaneously."
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Automated Maintenance & Folio Cleanup Cron",
+      "item": [
+        {
+          "name": "8.1 Manually Trigger Folio PDF Cleanup (GET)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/cron/clean-folios",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cron",
+                "clean-folios"
+              ],
+              "query": []
+            },
+            "description": "Manually triggers the 3-hour cleanup cycle to remove expired temporary guest folio PDFs from `uploads/folios`."
+          }
+        },
+        {
+          "name": "8.2 Manually Trigger Folio PDF Cleanup (DELETE)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/cron/clean-folios",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cron",
+                "clean-folios"
+              ],
+              "query": []
+            },
+            "description": "Alternative RESTful DELETE method to trigger cleanup of PDF files in `uploads/folios`."
+          }
+        }
+      ]
     }
   ]
 }
